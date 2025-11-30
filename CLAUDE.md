@@ -250,6 +250,128 @@ Examples:
 
 ---
 
+## Authentication & Authorization
+
+### Supabase Client Types
+
+GenAI-Merch uses three types of Supabase clients for different contexts:
+
+#### 1. Browser Client (Client Components)
+```tsx
+'use client'
+import { createBrowserClient } from '@/lib/supabase/client'
+
+export default function MyComponent() {
+  const supabase = createBrowserClient()
+  // Use for client-side operations
+}
+```
+
+#### 2. Server Client (Server Components & API Routes)
+```tsx
+import { createServerClient } from '@/lib/supabase/client'
+
+export default async function MyPage() {
+  const supabase = await createServerClient()
+  // Use for server-side operations with user context
+}
+```
+
+#### 3. Service Client (Admin Operations)
+```tsx
+import { createServiceClient } from '@/lib/supabase/client'
+
+// ⚠️ Server-side only - bypasses RLS
+const supabase = createServiceClient()
+// Use for admin operations only
+```
+
+### Authentication Patterns
+
+#### Protecting Server Components
+```tsx
+import { requireAuth } from '@/lib/supabase/server'
+
+export default async function ProtectedPage() {
+  const user = await requireAuth()
+  // User is guaranteed to be authenticated
+  return <div>Welcome {user.email}</div>
+}
+```
+
+#### Getting User in Server Components
+```tsx
+import { getUser } from '@/lib/supabase/server'
+
+export default async function MyPage() {
+  const user = await getUser()
+  if (!user) {
+    return <div>Please sign in</div>
+  }
+  return <div>Hello {user.email}</div>
+}
+```
+
+#### Client-Side Authentication
+```tsx
+'use client'
+import { createBrowserClient } from '@/lib/supabase/client'
+
+export default function SignInForm() {
+  const supabase = createBrowserClient()
+
+  const handleSignIn = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
+  }
+}
+```
+
+### Route Protection
+
+Middleware automatically protects routes:
+- **Protected routes**: `/dashboard/*`, `/design/*`, `/orders/*`, `/groups/*`
+- **Public routes**: `/`, `/signin`, `/signup`
+- Unauthenticated users are redirected to `/signin` with return URL
+- Authenticated users accessing `/signin` or `/signup` are redirected to `/dashboard/design`
+
+### Authentication Flow
+
+1. **Sign Up**: User creates account → Email verification → Account activated
+2. **Sign In**: User signs in → Session created → Redirected to dashboard
+3. **Session Management**: Middleware refreshes sessions automatically
+4. **Sign Out**: User signs out → Session cleared → Redirected to home
+
+### Best Practices
+
+1. **Always use the appropriate client type**
+   - Browser client for client components
+   - Server client for server components
+   - Service client only for admin operations
+
+2. **Never expose service role key**
+   - Keep service role key server-side only
+   - Never use in client components
+
+3. **Leverage Row Level Security (RLS)**
+   - Enable RLS on all tables
+   - Write policies for proper access control
+   - Service client bypasses RLS - use carefully
+
+4. **Handle errors gracefully**
+   - Always check for errors in auth operations
+   - Display user-friendly error messages
+   - Log errors for debugging
+
+5. **Validate user sessions**
+   - Middleware handles session refresh
+   - Use `getUser()` or `requireAuth()` in server components
+   - Check authentication status before protected operations
+
+---
+
 ## Environment Variables
 
 Required environment variables (never commit actual values):
@@ -309,4 +431,4 @@ This will:
 
 ---
 
-**Last Updated**: 2025-11-30
+**Last Updated**: 2025-11-30 (Authentication system added)

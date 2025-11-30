@@ -372,6 +372,237 @@ Middleware automatically protects routes:
 
 ---
 
+## Database & Prisma ORM
+
+### Database Schema
+
+GenAI-Merch uses PostgreSQL (via Supabase) with Prisma ORM for type-safe database access.
+
+#### Core Models
+
+**User** - User accounts (synced with Supabase Auth)
+- `id`, `email`, `name`
+- Relations: organizations, designs, orders, groupOrders
+
+**Organization** - Team/company accounts
+- `id`, `name`, `slug`
+- Relations: members, brandProfile
+
+**BrandProfile** - Brand identity for organizations
+- `logoUrl`, `colorPalette`, `fonts` (JSON)
+- One-to-one with Organization
+
+**Design** - Custom apparel designs
+- `name`, `imageUrl`, `vectorUrl`, `metadata` (JSON)
+- `aiPrompt` (if AI-generated)
+- Relations: user, orders
+
+**Order** - Individual product orders
+- `productType`, `size`, `quantity`, `price`
+- `status`: pending → processing → shipped → delivered
+- `stripeSessionId`, `printfulOrderId`
+- `shippingAddress` (JSON)
+- Relations: user, design, groupOrder
+
+**GroupOrder** - Team/event bulk orders
+- `name`, `slug`, `deadline`
+- `status`: open → closed → processing
+- Relations: createdBy (user), orders
+
+**OrganizationMember** - User-Organization relationships
+- `role`: member, admin, owner
+- Unique constraint on (userId, organizationId)
+
+### Using Prisma Client
+
+#### Import the Singleton Client
+```tsx
+import { prisma } from '@/lib/prisma'
+
+// Use in Server Components, API Routes, and Server Actions
+const users = await prisma.user.findMany()
+```
+
+#### Common Query Patterns
+
+**Find One:**
+```tsx
+const user = await prisma.user.findUnique({
+  where: { id: userId }
+})
+```
+
+**Find Many with Relations:**
+```tsx
+const designs = await prisma.design.findMany({
+  where: { userId },
+  include: { user: true },
+  orderBy: { createdAt: 'desc' }
+})
+```
+
+**Create:**
+```tsx
+const design = await prisma.design.create({
+  data: {
+    userId,
+    name: 'My Design',
+    imageUrl: 'https://...',
+    metadata: { dpi: 300, width: 4500 }
+  }
+})
+```
+
+**Update:**
+```tsx
+const order = await prisma.order.update({
+  where: { id: orderId },
+  data: { status: 'shipped' }
+})
+```
+
+**Delete:**
+```tsx
+await prisma.design.delete({
+  where: { id: designId }
+})
+```
+
+### Helper Query Functions
+
+Use pre-built query helpers from `@/lib/prisma/queries`:
+
+```tsx
+import {
+  getUserById,
+  getDesignsByUserId,
+  getGroupOrderBySlug,
+  createOrder,
+  updateOrderStatus
+} from '@/lib/prisma/queries'
+
+// Type-safe, reusable queries
+const user = await getUserById('user-id')
+const designs = await getDesignsByUserId('user-id')
+const groupOrder = await getGroupOrderBySlug('summer-camp-2024')
+```
+
+### Creating Migrations
+
+**Initial Setup (First Time):**
+1. Get your DATABASE_URL from Supabase:
+   - Dashboard → Settings → Database → Connection String
+   - Format: `postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres`
+2. Update `.env.local` with your DATABASE_URL
+3. Run initial migration:
+   ```bash
+   npx prisma migrate dev --name init
+   ```
+
+**Adding New Models or Fields:**
+1. Update `prisma/schema.prisma`
+2. Create and apply migration:
+   ```bash
+   npx prisma migrate dev --name descriptive_name
+   ```
+
+**Reset Database (Development Only):**
+```bash
+npx prisma migrate reset
+```
+
+**Apply Migrations in Production:**
+```bash
+npx prisma migrate deploy
+```
+
+### Updating Prisma Client
+
+After changing the schema, regenerate the client:
+```bash
+npx prisma generate
+```
+
+This updates TypeScript types for type-safe queries.
+
+### Seeding Data (Development)
+
+Create `prisma/seed.ts` for test data:
+```tsx
+import { prisma } from '../src/lib/prisma'
+
+async function main() {
+  // Create test users, designs, etc.
+  await prisma.user.create({
+    data: {
+      id: 'test-user-1',
+      email: 'test@example.com',
+      name: 'Test User'
+    }
+  })
+}
+
+main()
+  .catch(console.error)
+  .finally(() => prisma.$disconnect())
+```
+
+Run seed:
+```bash
+npx prisma db seed
+```
+
+### Best Practices
+
+1. **Always use the singleton client** (`@/lib/prisma`)
+   - Prevents connection pool exhaustion
+   - Properly configured for development and production
+
+2. **Use helper queries for common operations**
+   - Defined in `@/lib/prisma/queries.ts`
+   - Consistent, type-safe, reusable
+
+3. **Include relations when needed**
+   - Use `include` to fetch related data
+   - Avoid N+1 queries
+
+4. **Handle errors gracefully**
+   - Wrap database operations in try-catch
+   - Check for unique constraint violations
+   - Provide user-friendly error messages
+
+5. **Use transactions for multi-step operations**
+   ```tsx
+   await prisma.$transaction(async (tx) => {
+     const order = await tx.order.create({ data: orderData })
+     await tx.groupOrder.update({
+       where: { id: groupOrderId },
+       data: { /* ... */ }
+     })
+   })
+   ```
+
+6. **Leverage Prisma's type safety**
+   - Let TypeScript catch errors at compile time
+   - Use generated types from `@prisma/client`
+
+7. **Sync User model with Supabase Auth**
+   - Create/update Prisma User when user signs up/signs in
+   - Use Supabase user ID as Prisma User ID
+   - Example:
+   ```tsx
+   import { upsertUser } from '@/lib/prisma/queries'
+
+   // After Supabase auth
+   await upsertUser({
+     id: supabaseUser.id,
+     email: supabaseUser.email,
+     name: supabaseUser.user_metadata.name
+   })
+   ```
+
+---
+
 ## Environment Variables
 
 Required environment variables (never commit actual values):
@@ -431,4 +662,4 @@ This will:
 
 ---
 
-**Last Updated**: 2025-11-30 (Authentication system added)
+**Last Updated**: 2025-11-30 (Authentication system and Prisma ORM added)

@@ -58,39 +58,176 @@ GenAI-Merch is an AI-powered custom apparel design and group ordering platform t
 
 ## Development Workflows
 
+### Starting Development
+
+**1. Start the development server:**
+```bash
+npm run dev
+```
+- Server runs at http://localhost:3000
+- Hot reload enabled with Turbopack
+- Environment variables loaded from .env.local
+
+**2. Access Prisma Studio (Database GUI):**
+```bash
+npm run db:studio
+```
+- Opens at http://localhost:5555
+- Visual database browser
+- Edit data directly in the browser
+
 ### Before Starting Work
 1. **Always create a feature branch** before making changes
    ```bash
    git checkout -b feature/your-feature-name
    ```
+   Or use the automated command:
+   ```bash
+   /start-feature your-feature-name
+   ```
+
 2. **Pull latest changes** from main/staging
-3. **Use `/start-feature` command** when beginning new features
+   ```bash
+   git pull origin main
+   ```
+
+3. **Install dependencies** if needed
+   ```bash
+   npm install
+   ```
+
+4. **Run database migrations** if schema changed
+   ```bash
+   npm run db:migrate
+   ```
 
 ### During Development
+
+**Development Server:**
+```bash
+npm run dev          # Start Next.js dev server
+```
+
+**Database Operations:**
+```bash
+npm run db:studio    # Open Prisma Studio
+npm run db:push      # Push schema changes (dev only)
+npm run db:migrate   # Create and run migration
+npm run db:generate  # Generate Prisma Client
+npm run db:seed      # Seed database with test data
+```
+
+**Code Quality:**
+```bash
+npm run lint         # Run ESLint
+npm run lint:fix     # Auto-fix linting issues
+npm run type-check   # Check TypeScript types
+```
+
+**Best Practices:**
 1. **Run the development server** and test changes locally
-2. **Write tests** for new functionality
-3. **Use TypeScript strictly** - no `any` types without justification
-4. **Follow component patterns** established in the codebase
-5. **Test API integrations** with all third-party services
+2. **Use TypeScript strictly** - no `any` types without justification
+3. **Follow component patterns** established in the codebase
+4. **Test API integrations** with all third-party services
+5. **Check Prisma Studio** to verify database changes
 
 ### After Making Changes
-1. **Run tests** to ensure nothing broke
+
+**Quality Checks:**
+```bash
+npm run type-check   # Must pass
+npm run lint         # Must pass
+npm run build        # Must succeed
+```
+
+**Git Workflow:**
+1. **Stage changes**
    ```bash
-   npm run test
+   git add .
    ```
-2. **Check TypeScript** compilation
+
+2. **Commit with descriptive messages** (conventional commits)
    ```bash
-   npm run type-check
+   git commit -m "feat(design): add AI design generation"
    ```
-3. **Update documentation** when adding features or changing behavior
-4. **Commit with descriptive messages** following conventional commits format
-5. **Create PR** for review before merging to main
+
+3. **Push to remote**
+   ```bash
+   git push origin feature/your-feature-name
+   ```
+
+4. **Use ship command** for automated checks
+   ```bash
+   /ship-feature
+   ```
 
 ### Testing Strategy
 - Unit tests for utility functions and business logic
 - Integration tests for API routes
 - E2E tests for critical user flows (design creation, checkout)
 - Manual testing of Printful and Stripe integrations in sandbox mode
+
+### Available NPM Scripts
+
+**Development:**
+- `npm run dev` - Start development server
+- `npm run build` - Build for production
+- `npm run start` - Start production server
+
+**Code Quality:**
+- `npm run lint` - Run ESLint
+- `npm run lint:fix` - Auto-fix linting issues
+- `npm run type-check` - TypeScript type checking
+
+**Database (Prisma):**
+- `npm run db:push` - Push schema changes to database
+- `npm run db:studio` - Open Prisma Studio
+- `npm run db:generate` - Generate Prisma Client
+- `npm run db:migrate` - Run database migrations
+- `npm run db:seed` - Seed database with test data
+
+### Custom Claude Commands
+
+**Start a new feature:**
+```bash
+/start-feature [feature-name]
+```
+- Creates feature branch
+- Sets up documentation
+- Follows project conventions
+
+**Ship a completed feature:**
+```bash
+/ship-feature
+```
+- Runs quality checks
+- Updates documentation
+- Guides through merge process
+
+### VSCode Setup
+
+Install recommended extensions:
+- Prisma (syntax highlighting, formatting)
+- Tailwind CSS IntelliSense (class autocomplete)
+- ESLint (linting)
+- Prettier (code formatting)
+- Error Lens (inline error display)
+
+Settings are pre-configured in `.vscode/settings.json`:
+- Format on save enabled
+- ESLint auto-fix on save
+- Tailwind class completion
+- TypeScript strict mode
+
+### Development Best Practices
+
+1. **Always run type-check before committing**
+2. **Use Prisma Studio to inspect database changes**
+3. **Test auth flows in incognito mode**
+4. **Check responsive design on mobile**
+5. **Verify environment variables are set**
+6. **Use custom commands for consistency**
+7. **Keep CLAUDE.md updated with project context**
 
 ---
 
@@ -662,4 +799,4 @@ This will:
 
 ---
 
-**Last Updated**: 2025-11-30 (Authentication system and Prisma ORM added)
+**Last Updated**: 2025-11-30 (Development tooling and automation added)

@@ -1,0 +1,12 @@
+{
+  "recommendations": [
+    "prisma.prisma",
+    "bradlc.vscode-tailwindcss",
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "formulahendry.auto-rename-tag",
+    "streetsidesoftware.code-spell-checker",
+    "github.copilot",
+    "usernamehw.errorlens"
+  ]
+}

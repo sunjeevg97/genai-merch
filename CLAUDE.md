@@ -56,6 +56,216 @@ GenAI-Merch is an AI-powered custom apparel design and group ordering platform t
 
 ---
 
+## Key Dependencies
+
+### Design Studio Dependencies (Sprint 3-4)
+
+#### Fabric.js (`fabric@^6.9.0`)
+**Purpose:** HTML5 canvas manipulation for interactive design editing
+
+**Use Cases:**
+- Interactive design canvas with drag-and-drop positioning
+- Logo resizing with aspect ratio lock
+- Rotation controls for design elements
+- Undo/redo functionality
+- Export canvas to PNG/JPG for final design
+
+**Installation:**
+```bash
+npm install fabric@^6.9.0
+npm install --save-dev @types/fabric@^5.3.10
+```
+
+**Basic Usage:**
+```typescript
+import { Canvas, Image as FabricImage } from 'fabric';
+
+// Initialize canvas
+const canvas = new Canvas('canvas-id', {
+  width: 800,
+  height: 600,
+  backgroundColor: '#ffffff'
+});
+
+// Add image to canvas
+FabricImage.fromURL('/mockup.png', (img) => {
+  canvas.add(img);
+  canvas.renderAll();
+});
+
+// Export to image
+const dataURL = canvas.toDataURL({
+  format: 'png',
+  quality: 1,
+  multiplier: 2  // 2x resolution for print quality
+});
+```
+
+**Key Features Used:**
+- Object manipulation (drag, scale, rotate)
+- Canvas export to image formats
+- Layer management
+- Event handling for user interactions
+- JSON serialization for saving canvas state
+
+**Documentation:** http://fabricjs.com/docs/
+
+---
+
+#### Sharp (`sharp@^0.34.5`)
+**Purpose:** High-performance Node.js image processing for server-side validation and optimization
+
+**Use Cases:**
+- DPI validation for uploaded logos (minimum 150 DPI for print)
+- Image dimension checking (minimum 300x300px)
+- Format conversion (PNG, JPG, WebP)
+- Image optimization and compression
+- Metadata extraction (color space, dimensions, format)
+
+**Installation:**
+```bash
+npm install sharp@^0.34.5
+```
+
+**Basic Usage:**
+```typescript
+import sharp from 'sharp';
+
+// Validate image for print quality
+async function validateDesignImage(filePath: string) {
+  const metadata = await sharp(filePath).metadata();
+
+  // Check DPI (density)
+  const dpi = metadata.density || 72;
+  if (dpi < 150) {
+    throw new Error('Image DPI too low for print. Minimum 150 DPI required.');
+  }
+
+  // Check dimensions
+  if (metadata.width < 300 || metadata.height < 300) {
+    throw new Error('Image dimensions too small. Minimum 300x300px required.');
+  }
+
+  return {
+    width: metadata.width,
+    height: metadata.height,
+    format: metadata.format,
+    dpi: dpi,
+    colorSpace: metadata.space
+  };
+}
+
+// Optimize uploaded image
+async function optimizeImage(inputBuffer: Buffer) {
+  return await sharp(inputBuffer)
+    .resize(4500, 5400, { fit: 'inside', withoutEnlargement: true })
+    .png({ quality: 90 })
+    .toBuffer();
+}
+```
+
+**Key Features Used:**
+- Metadata extraction and validation
+- Image resizing and optimization
+- Format conversion
+- Quality control for print-ready files
+- Buffer-based processing (works with uploads)
+
+**Important Notes:**
+- Server-side only (Node.js API routes)
+- Native dependencies - may require platform-specific builds
+- High performance - faster than ImageMagick or GraphicsMagick
+
+**Documentation:** https://sharp.pixelplumbing.com/
+
+---
+
+#### React Dropzone (`react-dropzone@^14.3.8`)
+**Purpose:** Drag-and-drop file upload component for React
+
+**Use Cases:**
+- Logo file upload with drag-and-drop interface
+- File type validation (PNG, JPG, JPEG only)
+- File size validation (max 5MB)
+- Multiple file upload (for future features)
+- Visual feedback during drag operations
+
+**Installation:**
+```bash
+npm install react-dropzone@^14.3.8
+```
+
+**Basic Usage:**
+```typescript
+'use client';
+
+import { useDropzone } from 'react-dropzone';
+import { useCallback } from 'react';
+
+export function LogoUpload({ onUpload }: { onUpload: (file: File) => void }) {
+  const onDrop = useCallback((acceptedFiles: File[]) => {
+    if (acceptedFiles.length > 0) {
+      onUpload(acceptedFiles[0]);
+    }
+  }, [onUpload]);
+
+  const { getRootProps, getInputProps, isDragActive, isDragReject } = useDropzone({
+    onDrop,
+    accept: {
+      'image/png': ['.png'],
+      'image/jpeg': ['.jpg', '.jpeg']
+    },
+    maxSize: 5 * 1024 * 1024,  // 5MB
+    multiple: false,
+    maxFiles: 1
+  });
+
+  return (
+    <div
+      {...getRootProps()}
+      className={`
+        border-2 border-dashed rounded-lg p-8 text-center cursor-pointer
+        ${isDragActive ? 'border-primary bg-primary/10' : 'border-gray-300'}
+        ${isDragReject ? 'border-red-500 bg-red-50' : ''}
+      `}
+    >
+      <input {...getInputProps()} />
+      {isDragActive ? (
+        <p>Drop your logo here...</p>
+      ) : (
+        <p>Drag and drop a logo, or click to select</p>
+      )}
+    </div>
+  );
+}
+```
+
+**Key Features Used:**
+- File type restrictions via MIME types
+- File size validation
+- Drag-and-drop state management
+- Visual feedback states (active, reject)
+- Accessibility support (keyboard navigation)
+- Multiple file support (disabled for MVP, single logo only)
+
+**Validation:**
+- Client-side: MIME type, file size, file count
+- Server-side: Additional validation with Sharp (DPI, dimensions)
+
+**Documentation:** https://react-dropzone.js.org/
+
+---
+
+### Dependency Management Best Practices
+
+1. **Keep dependencies updated** - Check for security updates regularly
+2. **Review bundle size** - Monitor impact on client-side bundle with `npm run build`
+3. **Server vs. Client** - Use Sharp server-side only, Fabric.js and React Dropzone client-side
+4. **Type safety** - Install `@types/*` packages for TypeScript support
+5. **Version pinning** - Use exact versions in production, caret (^) in development
+
+---
+
 ## Development Workflows
 
 ### Starting Development
@@ -740,6 +950,299 @@ npx prisma db seed
 
 ---
 
+## File Storage (Supabase Storage)
+
+GenAI-Merch uses Supabase Storage for managing design files, logos, and exported designs.
+
+### Storage Helper Functions
+
+All storage operations are handled through helper functions in `@/lib/supabase/storage`:
+
+```typescript
+import {
+  uploadDesignFile,
+  uploadDesignExport,
+  deleteDesignFile,
+  getPublicUrl,
+  validateFileSize,
+  validateFileType,
+} from '@/lib/supabase/storage';
+```
+
+### Storage Bucket Structure
+
+**Bucket Name**: `design-assets`
+
+```
+design-assets/
+├── {userId}/
+│   ├── logos/
+│   │   └── {timestamp}-{random}-{filename}.png
+│   └── exports/
+│       └── {designId}.png
+```
+
+### Uploading Design Files
+
+#### Upload Logo (Source File)
+
+```typescript
+'use client';
+
+import { uploadDesignFile } from '@/lib/supabase/storage';
+
+async function handleFileUpload(file: File, userId: string) {
+  // Upload file
+  const result = await uploadDesignFile(file, userId);
+
+  if (result.success) {
+    console.log('File uploaded successfully');
+    console.log('Public URL:', result.url);
+    console.log('Storage path:', result.path);
+
+    // Save URL to database or use in design
+    setLogoUrl(result.url);
+  } else {
+    console.error('Upload failed:', result.error);
+    // Show error to user
+    toast.error(result.error);
+  }
+}
+```
+
+#### Upload Design Export (Final Rendered Design)
+
+```typescript
+import { uploadDesignExport } from '@/lib/supabase/storage';
+
+async function saveDesign(canvas: Canvas, userId: string, designId: string) {
+  // Export canvas to blob
+  const blob = await new Promise<Blob>((resolve) => {
+    canvas.toBlob((b) => resolve(b!), 'image/png', 1);
+  });
+
+  // Convert to File
+  const file = new File([blob], 'design.png', { type: 'image/png' });
+
+  // Upload export
+  const result = await uploadDesignExport(file, userId, designId);
+
+  if (result.success) {
+    console.log('Design exported:', result.url);
+
+    // Save to database
+    await prisma.design.update({
+      where: { id: designId },
+      data: { imageUrl: result.url },
+    });
+  } else {
+    console.error('Export upload failed:', result.error);
+  }
+}
+```
+
+### Validating Files
+
+#### Client-Side Validation
+
+```typescript
+import { validateFileSize, validateFileType } from '@/lib/supabase/storage';
+
+function handleFileSelect(file: File) {
+  // Check file size (max 5MB)
+  if (!validateFileSize(file)) {
+    alert('File too large. Maximum size is 5MB.');
+    return;
+  }
+
+  // Check file type (PNG or JPG)
+  if (!validateFileType(file)) {
+    alert('Invalid file type. Only PNG and JPG files are allowed.');
+    return;
+  }
+
+  // File is valid, proceed with upload
+  uploadFile(file);
+}
+```
+
+#### Comprehensive Validation
+
+```typescript
+import { validateFile } from '@/lib/supabase/storage';
+
+function validateBeforeUpload(file: File) {
+  const validation = validateFile(file);
+
+  if (!validation.isValid) {
+    // Show specific error message
+    toast.error(validation.error);
+    return false;
+  }
+
+  return true;
+}
+```
+
+### Deleting Files
+
+```typescript
+import { deleteDesignFile } from '@/lib/supabase/storage';
+
+async function removeDesign(filePath: string) {
+  const result = await deleteDesignFile(filePath);
+
+  if (result.success) {
+    console.log('File deleted successfully');
+  } else {
+    console.error('Delete failed:', result.error);
+  }
+}
+```
+
+### Getting Public URLs
+
+```typescript
+import { getPublicUrl } from '@/lib/supabase/storage';
+
+function displayStoredImage(filePath: string) {
+  const url = getPublicUrl(filePath);
+
+  if (url) {
+    return <img src={url} alt="Design" />;
+  } else {
+    return <p>Failed to load image</p>;
+  }
+}
+```
+
+### React Component Example (File Upload)
+
+```typescript
+'use client';
+
+import { useState } from 'react';
+import { uploadDesignFile } from '@/lib/supabase/storage';
+import { useUser } from '@/hooks/useUser';
+
+export function LogoUploadComponent() {
+  const { user } = useUser();
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    setUploading(true);
+    setError(null);
+
+    const result = await uploadDesignFile(file, user.id);
+
+    if (result.success) {
+      setLogoUrl(result.url!);
+    } else {
+      setError(result.error!);
+    }
+
+    setUploading(false);
+  }
+
+  return (
+    <div>
+      <input
+        type="file"
+        accept="image/png,image/jpeg"
+        onChange={handleUpload}
+        disabled={uploading}
+      />
+
+      {uploading && <p>Uploading...</p>}
+      {error && <p className="text-red-600">{error}</p>}
+      {logoUrl && <img src={logoUrl} alt="Uploaded logo" />}
+    </div>
+  );
+}
+```
+
+### Storage Bucket Policies
+
+The `design-assets` bucket has the following RLS policies:
+
+**Upload Policy:**
+```sql
+-- Users can upload to their own folder
+CREATE POLICY "Users can upload to own folder"
+  ON storage.objects FOR INSERT
+  TO authenticated
+  USING (
+    bucket_id = 'design-assets' AND
+    (storage.foldername(name))[1] = auth.uid()
+  );
+```
+
+**Read Policy:**
+```sql
+-- Public read access to all design assets
+CREATE POLICY "Public read access"
+  ON storage.objects FOR SELECT
+  TO public
+  USING (bucket_id = 'design-assets');
+```
+
+**Delete Policy:**
+```sql
+-- Users can delete their own files
+CREATE POLICY "Users can delete own files"
+  ON storage.objects FOR DELETE
+  TO authenticated
+  USING (
+    bucket_id = 'design-assets' AND
+    (storage.foldername(name))[1] = auth.uid()
+  );
+```
+
+### Error Handling Best Practices
+
+Always handle errors from storage operations:
+
+```typescript
+try {
+  const result = await uploadDesignFile(file, userId);
+
+  if (!result.success) {
+    // Handle specific errors
+    if (result.error?.includes('too large')) {
+      // Show file size error
+    } else if (result.error?.includes('Invalid file type')) {
+      // Show file type error
+    } else {
+      // Generic error
+      console.error('Upload failed:', result.error);
+    }
+  }
+} catch (error) {
+  // Handle unexpected errors
+  console.error('Unexpected error:', error);
+}
+```
+
+### File Size Limits
+
+- **Maximum file size**: 5MB
+- **Recommended**: Compress images before upload
+- **Validation**: Automatic via `uploadDesignFile()`
+
+### Supported File Types
+
+- **PNG** (`.png`, `image/png`)
+- **JPEG** (`.jpg`, `.jpeg`, `image/jpeg`)
+
+Both MIME type and file extension are validated.
+
+---
+
 ## Environment Variables
 
 Required environment variables (never commit actual values):
@@ -799,4 +1302,4 @@ This will:
 
 ---
 
-**Last Updated**: 2025-11-30 (Development tooling and automation added)
+**Last Updated**: 2025-12-01 (Added Supabase Storage helpers for file upload, validation, and management)

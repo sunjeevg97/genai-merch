@@ -7,7 +7,7 @@
 import { createBrowserClient } from './client';
 
 // Constants
-const DESIGNS_BUCKET = 'design-assets';
+const DESIGNS_BUCKET = 'designs';
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB in bytes
 const ALLOWED_MIME_TYPES = ['image/png', 'image/jpeg', 'image/jpg'];
 const ALLOWED_EXTENSIONS = ['.png', '.jpg', '.jpeg'];

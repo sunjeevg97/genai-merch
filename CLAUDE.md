@@ -971,10 +971,10 @@ import {
 
 ### Storage Bucket Structure
 
-**Bucket Name**: `design-assets`
+**Bucket Name**: `designs`
 
 ```
-design-assets/
+designs/
 ├── {userId}/
 │   ├── logos/
 │   │   └── {timestamp}-{random}-{filename}.png
@@ -1168,7 +1168,7 @@ export function LogoUploadComponent() {
 
 ### Storage Bucket Policies
 
-The `design-assets` bucket has the following RLS policies:
+The `designs` bucket has the following RLS policies:
 
 **Upload Policy:**
 ```sql
@@ -1177,7 +1177,7 @@ CREATE POLICY "Users can upload to own folder"
   ON storage.objects FOR INSERT
   TO authenticated
   USING (
-    bucket_id = 'design-assets' AND
+    bucket_id = 'designs' AND
     (storage.foldername(name))[1] = auth.uid()
   );
 ```
@@ -1188,7 +1188,7 @@ CREATE POLICY "Users can upload to own folder"
 CREATE POLICY "Public read access"
   ON storage.objects FOR SELECT
   TO public
-  USING (bucket_id = 'design-assets');
+  USING (bucket_id = 'designs');
 ```
 
 **Delete Policy:**
@@ -1198,7 +1198,7 @@ CREATE POLICY "Users can delete own files"
   ON storage.objects FOR DELETE
   TO authenticated
   USING (
-    bucket_id = 'design-assets' AND
+    bucket_id = 'designs' AND
     (storage.foldername(name))[1] = auth.uid()
   );
 ```

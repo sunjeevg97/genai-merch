@@ -19,7 +19,7 @@ import {
 function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get("redirect") || "/";
+  const redirectTo = searchParams.get("redirect") || "/design/create";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

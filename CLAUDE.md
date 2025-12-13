@@ -950,6 +950,299 @@ npx prisma db seed
 
 ---
 
+## File Storage (Supabase Storage)
+
+GenAI-Merch uses Supabase Storage for managing design files, logos, and exported designs.
+
+### Storage Helper Functions
+
+All storage operations are handled through helper functions in `@/lib/supabase/storage`:
+
+```typescript
+import {
+  uploadDesignFile,
+  uploadDesignExport,
+  deleteDesignFile,
+  getPublicUrl,
+  validateFileSize,
+  validateFileType,
+} from '@/lib/supabase/storage';
+```
+
+### Storage Bucket Structure
+
+**Bucket Name**: `design-assets`
+
+```
+design-assets/
+├── {userId}/
+│   ├── logos/
+│   │   └── {timestamp}-{random}-{filename}.png
+│   └── exports/
+│       └── {designId}.png
+```
+
+### Uploading Design Files
+
+#### Upload Logo (Source File)
+
+```typescript
+'use client';
+
+import { uploadDesignFile } from '@/lib/supabase/storage';
+
+async function handleFileUpload(file: File, userId: string) {
+  // Upload file
+  const result = await uploadDesignFile(file, userId);
+
+  if (result.success) {
+    console.log('File uploaded successfully');
+    console.log('Public URL:', result.url);
+    console.log('Storage path:', result.path);
+
+    // Save URL to database or use in design
+    setLogoUrl(result.url);
+  } else {
+    console.error('Upload failed:', result.error);
+    // Show error to user
+    toast.error(result.error);
+  }
+}
+```
+
+#### Upload Design Export (Final Rendered Design)
+
+```typescript
+import { uploadDesignExport } from '@/lib/supabase/storage';
+
+async function saveDesign(canvas: Canvas, userId: string, designId: string) {
+  // Export canvas to blob
+  const blob = await new Promise<Blob>((resolve) => {
+    canvas.toBlob((b) => resolve(b!), 'image/png', 1);
+  });
+
+  // Convert to File
+  const file = new File([blob], 'design.png', { type: 'image/png' });
+
+  // Upload export
+  const result = await uploadDesignExport(file, userId, designId);
+
+  if (result.success) {
+    console.log('Design exported:', result.url);
+
+    // Save to database
+    await prisma.design.update({
+      where: { id: designId },
+      data: { imageUrl: result.url },
+    });
+  } else {
+    console.error('Export upload failed:', result.error);
+  }
+}
+```
+
+### Validating Files
+
+#### Client-Side Validation
+
+```typescript
+import { validateFileSize, validateFileType } from '@/lib/supabase/storage';
+
+function handleFileSelect(file: File) {
+  // Check file size (max 5MB)
+  if (!validateFileSize(file)) {
+    alert('File too large. Maximum size is 5MB.');
+    return;
+  }
+
+  // Check file type (PNG or JPG)
+  if (!validateFileType(file)) {
+    alert('Invalid file type. Only PNG and JPG files are allowed.');
+    return;
+  }
+
+  // File is valid, proceed with upload
+  uploadFile(file);
+}
+```
+
+#### Comprehensive Validation
+
+```typescript
+import { validateFile } from '@/lib/supabase/storage';
+
+function validateBeforeUpload(file: File) {
+  const validation = validateFile(file);
+
+  if (!validation.isValid) {
+    // Show specific error message
+    toast.error(validation.error);
+    return false;
+  }
+
+  return true;
+}
+```
+
+### Deleting Files
+
+```typescript
+import { deleteDesignFile } from '@/lib/supabase/storage';
+
+async function removeDesign(filePath: string) {
+  const result = await deleteDesignFile(filePath);
+
+  if (result.success) {
+    console.log('File deleted successfully');
+  } else {
+    console.error('Delete failed:', result.error);
+  }
+}
+```
+
+### Getting Public URLs
+
+```typescript
+import { getPublicUrl } from '@/lib/supabase/storage';
+
+function displayStoredImage(filePath: string) {
+  const url = getPublicUrl(filePath);
+
+  if (url) {
+    return <img src={url} alt="Design" />;
+  } else {
+    return <p>Failed to load image</p>;
+  }
+}
+```
+
+### React Component Example (File Upload)
+
+```typescript
+'use client';
+
+import { useState } from 'react';
+import { uploadDesignFile } from '@/lib/supabase/storage';
+import { useUser } from '@/hooks/useUser';
+
+export function LogoUploadComponent() {
+  const { user } = useUser();
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    setUploading(true);
+    setError(null);
+
+    const result = await uploadDesignFile(file, user.id);
+
+    if (result.success) {
+      setLogoUrl(result.url!);
+    } else {
+      setError(result.error!);
+    }
+
+    setUploading(false);
+  }
+
+  return (
+    <div>
+      <input
+        type="file"
+        accept="image/png,image/jpeg"
+        onChange={handleUpload}
+        disabled={uploading}
+      />
+
+      {uploading && <p>Uploading...</p>}
+      {error && <p className="text-red-600">{error}</p>}
+      {logoUrl && <img src={logoUrl} alt="Uploaded logo" />}
+    </div>
+  );
+}
+```
+
+### Storage Bucket Policies
+
+The `design-assets` bucket has the following RLS policies:
+
+**Upload Policy:**
+```sql
+-- Users can upload to their own folder
+CREATE POLICY "Users can upload to own folder"
+  ON storage.objects FOR INSERT
+  TO authenticated
+  USING (
+    bucket_id = 'design-assets' AND
+    (storage.foldername(name))[1] = auth.uid()
+  );
+```
+
+**Read Policy:**
+```sql
+-- Public read access to all design assets
+CREATE POLICY "Public read access"
+  ON storage.objects FOR SELECT
+  TO public
+  USING (bucket_id = 'design-assets');
+```
+
+**Delete Policy:**
+```sql
+-- Users can delete their own files
+CREATE POLICY "Users can delete own files"
+  ON storage.objects FOR DELETE
+  TO authenticated
+  USING (
+    bucket_id = 'design-assets' AND
+    (storage.foldername(name))[1] = auth.uid()
+  );
+```
+
+### Error Handling Best Practices
+
+Always handle errors from storage operations:
+
+```typescript
+try {
+  const result = await uploadDesignFile(file, userId);
+
+  if (!result.success) {
+    // Handle specific errors
+    if (result.error?.includes('too large')) {
+      // Show file size error
+    } else if (result.error?.includes('Invalid file type')) {
+      // Show file type error
+    } else {
+      // Generic error
+      console.error('Upload failed:', result.error);
+    }
+  }
+} catch (error) {
+  // Handle unexpected errors
+  console.error('Unexpected error:', error);
+}
+```
+
+### File Size Limits
+
+- **Maximum file size**: 5MB
+- **Recommended**: Compress images before upload
+- **Validation**: Automatic via `uploadDesignFile()`
+
+### Supported File Types
+
+- **PNG** (`.png`, `image/png`)
+- **JPEG** (`.jpg`, `.jpeg`, `image/jpeg`)
+
+Both MIME type and file extension are validated.
+
+---
+
 ## Environment Variables
 
 Required environment variables (never commit actual values):
@@ -1009,4 +1302,4 @@ This will:
 
 ---
 
-**Last Updated**: 2025-12-01 (Design Studio dependencies documented: Fabric.js, Sharp, React Dropzone)
+**Last Updated**: 2025-12-01 (Added Supabase Storage helpers for file upload, validation, and management)

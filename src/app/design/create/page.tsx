@@ -8,7 +8,19 @@
  * - Save designs to the database
  */
 
+'use client';
+
+import { useState } from 'react';
+import { FileUpload } from '@/components/design/FileUpload';
+
 export default function CreateDesignPage() {
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+
+  const handleFileSelected = (file: File) => {
+    console.log('File selected:', file.name, file.size, file.type);
+    setUploadedFile(file);
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto py-8">
@@ -20,7 +32,7 @@ export default function CreateDesignPage() {
           <div className="space-y-4">
             <div className="bg-card rounded-lg border p-6">
               <h2 className="text-xl font-semibold mb-4">Upload Logo</h2>
-              {/* FileUpload component will go here */}
+              <FileUpload onFileSelected={handleFileSelected} />
             </div>
 
             <div className="bg-card rounded-lg border p-6">

@@ -1243,6 +1243,171 @@ Both MIME type and file extension are validated.
 
 ---
 
+## API Routes
+
+GenAI-Merch provides REST API endpoints for design studio operations.
+
+### File Upload API
+
+**Endpoint**: `POST /api/designs/upload`
+
+Upload logo files to Supabase Storage with authentication and validation.
+
+#### Request
+
+**Method**: POST
+**Content-Type**: `multipart/form-data`
+**Authentication**: Required (Supabase session cookie)
+
+**Body Parameters**:
+- `file` (File, required): The image file to upload
+  - Allowed types: PNG, JPG, JPEG
+  - Max size: 5MB
+  - MIME types: `image/png`, `image/jpeg`, `image/jpg`
+
+#### Response
+
+**Success (200)**:
+```json
+{
+  "success": true,
+  "data": {
+    "filePath": "user-abc123/logos/1702123456789-xyz789-logo.png",
+    "publicUrl": "https://...supabase.co/storage/v1/object/public/design-assets/...",
+    "fileName": "logo.png",
+    "fileSize": 245678
+  }
+}
+```
+
+**Error (400 - Bad Request)**:
+```json
+{
+  "success": false,
+  "error": "No file provided"
+}
+```
+
+**Error (401 - Unauthorized)**:
+```json
+{
+  "success": false,
+  "error": "Not authenticated"
+}
+```
+
+**Error (500 - Server Error)**:
+```json
+{
+  "success": false,
+  "error": "Upload failed: Storage bucket not found"
+}
+```
+
+#### Error Messages
+
+| Status | Error Message | Description |
+|--------|---------------|-------------|
+| 401 | `Not authenticated` | User is not signed in |
+| 400 | `No file provided` | Request missing file field |
+| 400 | `Invalid file type. Only PNG and JPG files are allowed` | File type not PNG/JPG |
+| 400 | `File too large. Maximum size is 5MB` | File exceeds size limit |
+| 500 | `Upload failed: {reason}` | Server-side upload error |
+
+#### Example Usage
+
+**JavaScript/TypeScript**:
+```typescript
+async function uploadLogo(file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch('/api/designs/upload', {
+    method: 'POST',
+    body: formData,
+    // Cookies sent automatically by browser
+  });
+
+  const result = await response.json();
+
+  if (result.success) {
+    console.log('Uploaded to:', result.data.publicUrl);
+    return result.data;
+  } else {
+    throw new Error(result.error);
+  }
+}
+```
+
+**cURL** (for testing):
+```bash
+# 1. Get auth token from browser (DevTools > Application > Cookies)
+# Look for cookie starting with "sb-" containing "auth-token"
+
+# 2. Upload file
+curl -X POST http://localhost:3000/api/designs/upload \
+  -H "Cookie: sb-{project-id}-auth-token={your-token}" \
+  -F "file=@/path/to/your/logo.png"
+```
+
+#### Security Features
+
+1. **Authentication**: Requires valid Supabase session
+2. **File Type Validation**: Server-side MIME type and extension check
+3. **File Size Validation**: Enforced 5MB limit
+4. **Filename Sanitization**: Special characters removed, unique timestamps added
+5. **User-Scoped Storage**: Files stored in user-specific folders (`{userId}/logos/`)
+6. **No Overwrites**: Unique filenames prevent accidental overwrites
+
+#### Rate Limiting
+
+**Recommended Configuration**:
+- **Limit**: 10 uploads per minute per user
+- **Implementation**: Use middleware or Upstash Rate Limit
+- **Headers**: Add `X-RateLimit-Limit`, `X-RateLimit-Remaining` headers
+
+**Setup with Upstash** (optional):
+```typescript
+// middleware.ts
+import { Ratelimit } from "@upstash/ratelimit";
+import { Redis } from "@upstash/redis";
+
+const ratelimit = new Ratelimit({
+  redis: Redis.fromEnv(),
+  limiter: Ratelimit.slidingWindow(10, "1 m"),
+});
+
+export async function middleware(request: NextRequest) {
+  if (request.nextUrl.pathname.startsWith('/api/designs/upload')) {
+    const userId = await getUserId(request);
+    const { success } = await ratelimit.limit(userId);
+
+    if (!success) {
+      return new Response("Too many requests", { status: 429 });
+    }
+  }
+}
+```
+
+#### Logging
+
+All upload attempts are logged with:
+- **User ID**: Authenticated user identifier
+- **File name**: Original filename
+- **File size**: In MB
+- **Timestamp**: ISO 8601 format
+- **Result**: Success or error message
+- **Duration**: Upload time in milliseconds
+
+**Example Log Output**:
+```
+[Upload] Request from user: abc123-def456-ghi789
+[Upload] Starting upload - user: abc123-def456-ghi789, file: logo.png, size: 2.3MB
+[Upload] Success - user: abc123-def456-ghi789, file: logo.png, path: abc123-def456-ghi789/logos/1702123456789-xyz789-logo.png, duration: 847ms
+```
+
+---
+
 ## Environment Variables
 
 Required environment variables (never commit actual values):

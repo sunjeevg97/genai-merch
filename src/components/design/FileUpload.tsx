@@ -11,7 +11,9 @@
  * - File size and name display
  * - Change file functionality
  * - Client-side validation (type, size)
- * - Toast notifications for errors
+ * - Server-side upload to Supabase Storage
+ * - Upload progress tracking
+ * - Toast notifications for success/errors
  * - Fully accessible with keyboard navigation
  */
 
@@ -20,13 +22,15 @@
 import { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { toast } from 'sonner';
-import { Upload, X, FileImage, AlertCircle } from 'lucide-react';
+import { Upload, X, FileImage, AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
+import { useFileUpload, type UploadResultData } from '@/lib/hooks/useFileUpload';
 
 // Types
 interface FileUploadProps {
-  onFileSelected: (file: File) => void;
+  onFileUploaded?: (data: UploadResultData) => void;
   acceptedFormats?: string[];
   maxSize?: number; // in bytes
 }
@@ -47,27 +51,31 @@ function formatFileSize(bytes: number): string {
 /**
  * FileUpload Component
  *
- * @param onFileSelected - Callback when file is selected and validated
+ * @param onFileUploaded - Callback when file is successfully uploaded to storage
  * @param acceptedFormats - Array of accepted MIME types (default: PNG, JPG)
  * @param maxSize - Maximum file size in bytes (default: 5MB)
  *
  * @example
  * ```tsx
  * <FileUpload
- *   onFileSelected={(file) => handleUpload(file)}
+ *   onFileUploaded={(data) => console.log('Uploaded:', data.publicUrl)}
  *   acceptedFormats={['image/png', 'image/jpeg']}
  *   maxSize={5 * 1024 * 1024}
  * />
  * ```
  */
 export function FileUpload({
-  onFileSelected,
+  onFileUploaded,
   acceptedFormats = DEFAULT_ACCEPTED_FORMATS,
   maxSize = DEFAULT_MAX_SIZE,
 }: FileUploadProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [uploadedData, setUploadedData] = useState<UploadResultData | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Upload hook
+  const { uploadFile, uploading, progress } = useFileUpload();
 
   /**
    * Validate file before accepting
@@ -102,7 +110,7 @@ export function FileUpload({
    * Handle file drop/selection
    */
   const onDrop = useCallback(
-    (acceptedFiles: File[], rejectedFiles: any[]) => {
+    async (acceptedFiles: File[], rejectedFiles: any[]) => {
       // Clear previous error
       setError(null);
 
@@ -147,14 +155,28 @@ export function FileUpload({
         // Set selected file
         setSelectedFile(file);
 
-        // Notify parent component
-        onFileSelected(file);
+        // Upload file to server
+        toast.loading('Uploading file...', { id: 'upload-toast' });
 
-        // Show success message
-        toast.success('File selected successfully');
+        const result = await uploadFile(file);
+
+        if (result.success && result.data) {
+          // Success
+          setUploadedData(result.data);
+          toast.success('File uploaded successfully!', { id: 'upload-toast' });
+
+          // Notify parent component
+          if (onFileUploaded) {
+            onFileUploaded(result.data);
+          }
+        } else {
+          // Error
+          setError(result.error || 'Upload failed');
+          toast.error(result.error || 'Upload failed', { id: 'upload-toast' });
+        }
       }
     },
-    [onFileSelected, validateFile, acceptedFormats, maxSize]
+    [uploadFile, onFileUploaded, validateFile, acceptedFormats, maxSize]
   );
 
   /**
@@ -163,6 +185,7 @@ export function FileUpload({
   const clearFile = useCallback(() => {
     setSelectedFile(null);
     setPreviewUrl(null);
+    setUploadedData(null);
     setError(null);
   }, []);
 
@@ -185,8 +208,9 @@ export function FileUpload({
     maxSize,
     multiple: false,
     maxFiles: 1,
-    noClick: !!selectedFile, // Disable click when file is selected
-    noKeyboard: !!selectedFile,
+    noClick: !!selectedFile || uploading, // Disable click when file is selected or uploading
+    noKeyboard: !!selectedFile || uploading,
+    disabled: uploading, // Disable dropzone during upload
   });
 
   // Render: File selected state
@@ -196,13 +220,16 @@ export function FileUpload({
         <div className="space-y-4">
           {/* Preview Header */}
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium">Selected File</h3>
+            <h3 className="text-sm font-medium">
+              {uploading ? 'Uploading...' : uploadedData ? 'Uploaded' : 'Selected File'}
+            </h3>
             <Button
               variant="ghost"
               size="sm"
               onClick={clearFile}
               className="h-8 w-8 p-0"
               aria-label="Remove file"
+              disabled={uploading}
             >
               <X className="h-4 w-4" />
             </Button>
@@ -217,6 +244,12 @@ export function FileUpload({
                 alt="File preview"
                 className="h-full w-full object-cover"
               />
+              {/* Upload overlay */}
+              {uploading && (
+                <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+              )}
             </div>
 
             {/* File Info */}
@@ -233,19 +266,37 @@ export function FileUpload({
                   <p className="text-xs text-muted-foreground">
                     {selectedFile.type.split('/')[1].toUpperCase()}
                   </p>
+                  {/* Upload status */}
+                  {uploadedData && (
+                    <p className="text-xs text-green-600 mt-1 font-medium">
+                      ✓ Upload complete
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
           </div>
 
+          {/* Upload Progress */}
+          {uploading && (
+            <div className="space-y-2">
+              <Progress value={progress} className="h-2" />
+              <p className="text-xs text-center text-muted-foreground">
+                {progress}% uploaded
+              </p>
+            </div>
+          )}
+
           {/* Change File Button */}
-          <Button
-            variant="outline"
-            onClick={open}
-            className="w-full"
-          >
-            Change File
-          </Button>
+          {!uploading && (
+            <Button
+              variant="outline"
+              onClick={open}
+              className="w-full"
+            >
+              Change File
+            </Button>
+          )}
         </div>
       </Card>
     );

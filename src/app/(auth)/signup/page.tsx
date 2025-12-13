@@ -47,7 +47,7 @@ export default function SignUpPage() {
 
     try {
       const supabase = createBrowserClient();
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -61,8 +61,16 @@ export default function SignUpPage() {
         return;
       }
 
-      // Success - show confirmation message
-      setSuccess(true);
+      // Check if user was auto-confirmed (email confirmation disabled)
+      if (data.session) {
+        // User is automatically logged in - redirect to dashboard
+        router.push('/');
+        router.refresh();
+      } else {
+        // Email confirmation required - show success message
+        setSuccess(true);
+      }
+
       setLoading(false);
     } catch (err) {
       setError("An unexpected error occurred. Please try again.");

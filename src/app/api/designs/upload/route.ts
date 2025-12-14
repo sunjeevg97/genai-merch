@@ -57,10 +57,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getUser } from '@/lib/supabase/server';
-import { uploadDesignFile } from '@/lib/supabase/storage';
+import { getUser, createServerClient } from '@/lib/supabase/server';
 
 // Constants
+const DESIGNS_BUCKET = 'designs';
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB in bytes
 const ALLOWED_MIME_TYPES = ['image/png', 'image/jpeg', 'image/jpg'];
 const ALLOWED_EXTENSIONS = ['.png', '.jpg', '.jpeg'];
@@ -91,6 +91,21 @@ function validateFileSize(file: File): boolean {
  */
 function formatFileSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
+}
+
+/**
+ * Generate unique filename for storage
+ */
+function generateUniqueFilename(userId: string, originalFilename: string): string {
+  const timestamp = Date.now();
+  const random = Math.random().toString(36).substring(2, 8);
+  const extension = originalFilename.substring(originalFilename.lastIndexOf('.'));
+  const sanitizedName = originalFilename
+    .substring(0, originalFilename.lastIndexOf('.'))
+    .replace(/[^a-zA-Z0-9-_]/g, '-')
+    .substring(0, 50);
+
+  return `${userId}/logos/${timestamp}-${random}-${sanitizedName}${extension}`;
 }
 
 /**
@@ -156,33 +171,50 @@ export async function POST(request: NextRequest) {
       `[Upload] Starting upload - user: ${user.id}, file: ${file.name}, size: ${formatFileSize(file.size)}`
     );
 
-    const uploadResult = await uploadDesignFile(file, user.id);
+    // Generate unique filename
+    const filePath = generateUniqueFilename(user.id, file.name);
 
-    if (!uploadResult.success) {
+    // Get server Supabase client (with user's auth context)
+    const supabase = await createServerClient();
+
+    // Upload file to storage
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from(DESIGNS_BUCKET)
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false,
+      });
+
+    if (uploadError) {
       console.error(
-        `[Upload] Upload failed - user: ${user.id}, file: ${file.name}, error: ${uploadResult.error}`
+        `[Upload] Upload failed - user: ${user.id}, file: ${file.name}, error: ${uploadError.message}`
       );
       return NextResponse.json(
         {
           success: false,
-          error: `Upload failed: ${uploadResult.error}`,
+          error: `Upload failed: ${uploadError.message}`,
         },
         { status: 500 }
       );
     }
 
+    // Get public URL
+    const { data: urlData } = supabase.storage
+      .from(DESIGNS_BUCKET)
+      .getPublicUrl(filePath);
+
     // 6. Success response
     const duration = Date.now() - startTime;
     console.log(
-      `[Upload] Success - user: ${user.id}, file: ${file.name}, path: ${uploadResult.path}, duration: ${duration}ms`
+      `[Upload] Success - user: ${user.id}, file: ${file.name}, path: ${filePath}, duration: ${duration}ms`
     );
 
     return NextResponse.json(
       {
         success: true,
         data: {
-          filePath: uploadResult.path!,
-          publicUrl: uploadResult.url!,
+          filePath: filePath,
+          publicUrl: urlData.publicUrl,
           fileName: file.name,
           fileSize: file.size,
         },

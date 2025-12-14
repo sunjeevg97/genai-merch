@@ -12,13 +12,14 @@
 
 import { useState } from 'react';
 import { FileUpload } from '@/components/design/FileUpload';
+import type { UploadResultData } from '@/lib/hooks/useFileUpload';
 
 export default function CreateDesignPage() {
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [uploadedData, setUploadedData] = useState<UploadResultData | null>(null);
 
-  const handleFileSelected = (file: File) => {
-    console.log('File selected:', file.name, file.size, file.type);
-    setUploadedFile(file);
+  const handleFileUploaded = (data: UploadResultData) => {
+    console.log('File uploaded:', data.fileName, data.fileSize, data.publicUrl);
+    setUploadedData(data);
   };
 
   return (
@@ -32,7 +33,7 @@ export default function CreateDesignPage() {
           <div className="space-y-4">
             <div className="bg-card rounded-lg border p-6">
               <h2 className="text-xl font-semibold mb-4">Upload Logo</h2>
-              <FileUpload onFileSelected={handleFileSelected} />
+              <FileUpload onFileUploaded={handleFileUploaded} />
             </div>
 
             <div className="bg-card rounded-lg border p-6">

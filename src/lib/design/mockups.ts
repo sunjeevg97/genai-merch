@@ -1,158 +1,320 @@
 /**
- * Mockup Data and Utilities
+ * Mockup Configuration File
  *
- * Configuration and helpers for product mockups
+ * This file defines product mockups and their print areas for the design studio.
+ * Mockups are templates showing how logos will appear on different products.
  *
- * Features:
- * - Mockup definitions (t-shirt, hoodie, etc.)
- * - Print area specifications
- * - Color variants
- * - View types (front, back, side)
+ * HOW TO MEASURE PRINT AREA COORDINATES:
+ * =======================================
+ * 1. Open your mockup image in an image editor (Photoshop, GIMP, etc.)
+ * 2. Identify the printable area on the garment (chest area for t-shirts)
+ * 3. Note the X and Y coordinates of the top-left corner of the print area
+ * 4. Measure the width and height of the print area in pixels
+ * 5. Add these values to the printArea object below
+ *
+ * STANDARD PRINT SIZES FOR T-SHIRTS:
+ * ===================================
+ * - Adult T-Shirt Front: 12" wide x 16" tall (typical maximum)
+ * - Adult T-Shirt Back: 12" wide x 16" tall
+ * - Youth T-Shirt: 10" wide x 14" tall
+ * - Pocket Print: 3.5" wide x 3.5" tall
+ * - Full Front Print: Up to 14" wide x 18" tall
+ *
+ * Note: Actual pixel dimensions depend on your mockup image resolution.
+ * For a 1000px wide mockup, a 12" print area might be ~400px wide.
+ *
+ * HOW TO ADD NEW MOCKUPS:
+ * =======================
+ * 1. Create or obtain a high-quality product mockup image (PNG recommended)
+ * 2. Save it in the public/mockups/ directory
+ * 3. Measure the print area coordinates (see instructions above)
+ * 4. Add a new entry to the MOCKUPS array below
+ * 5. Ensure the ID is unique (use format: productType-color-view)
+ * 6. Test the mockup in the design studio to verify alignment
+ *
+ * Example workflow:
+ * - Add image: public/mockups/polo-navy-front.png
+ * - Measure print area: x=220, y=190, width=180, height=230
+ * - Add to MOCKUPS array (see examples below)
  */
 
-export type ProductType = 't-shirt' | 'hoodie';
-export type MockupView = 'front' | 'back' | 'side';
-export type MockupColor = 'white' | 'black' | 'gray' | 'navy';
+/**
+ * Product types available in the design studio
+ */
+export type ProductType = 'tshirt' | 'hoodie' | 'polo' | 'sweatshirt';
 
-export interface PrintArea {
-  x: number; // X position on canvas
-  y: number; // Y position on canvas
-  width: number; // Width in pixels
-  height: number; // Height in pixels
-  widthInches?: number; // Actual print width in inches
-  heightInches?: number; // Actual print height in inches
-}
+/**
+ * View angles for mockups
+ */
+export type MockupView = 'front' | 'back';
 
+/**
+ * Mockup Interface
+ *
+ * Defines the structure of a product mockup with its print area specifications
+ */
 export interface Mockup {
+  /** Unique identifier for the mockup (format: productType-color-view) */
   id: string;
+
+  /** Display name shown to users */
+  name: string;
+
+  /** Type of product (tshirt, hoodie, polo, sweatshirt) */
   productType: ProductType;
+
+  /** Color of the product (e.g., 'black', 'white', 'navy') */
+  color: string;
+
+  /** View angle of the mockup (front or back) */
   view: MockupView;
-  color: MockupColor;
+
+  /** Path to the mockup image (relative to public directory) */
   imageUrl: string;
-  printArea: PrintArea;
-  canvasWidth: number;
-  canvasHeight: number;
+
+  /** Print area coordinates and dimensions */
+  printArea: {
+    /** X position of top-left corner of print area (pixels) */
+    x: number;
+
+    /** Y position of top-left corner of print area (pixels) */
+    y: number;
+
+    /** Width of print area (pixels) */
+    width: number;
+
+    /** Height of print area (pixels) */
+    height: number;
+  };
 }
 
 /**
- * Mockup catalog
- * In production, these would be loaded from a database or API
+ * Available Mockups
+ *
+ * This array contains all available product mockups.
+ * Add new mockups here following the same structure.
+ *
+ * IMPORTANT:
+ * - Each mockup must have a unique ID
+ * - Image files must exist in the public/mockups/ directory
+ * - Print area coordinates must be accurate for proper logo placement
+ * - Test each mockup thoroughly before deploying to production
  */
 export const MOCKUPS: Mockup[] = [
   {
-    id: 'tshirt-front-white',
-    productType: 't-shirt',
+    id: 'sweatshirt-black-front',
+    name: 'Black Sweatshirt (Front)',
+    productType: 'sweatshirt',
+    color: 'black',
     view: 'front',
-    color: 'white',
-    imageUrl: '/mockups/tshirt-front-white.png',
+    imageUrl: '/mockups/sweatshirt-black-front.png',
     printArea: {
-      x: 300,
-      y: 200,
-      width: 400,
-      height: 500,
-      widthInches: 12,
-      heightInches: 16,
+      x: 200,    // Adjust based on your mockup image
+      y: 180,    // Adjust based on your mockup image
+      width: 200,
+      height: 250,
     },
-    canvasWidth: 1000,
-    canvasHeight: 1200,
   },
   {
-    id: 'tshirt-front-black',
-    productType: 't-shirt',
+    id: 'tshirt-white-front',
+    name: 'White T-Shirt (Front)',
+    productType: 'tshirt',
+    color: 'white',
     view: 'front',
-    color: 'black',
-    imageUrl: '/mockups/tshirt-front-black.png',
+    imageUrl: '/mockups/tshirt-white-front.png',
     printArea: {
-      x: 300,
-      y: 200,
-      width: 400,
-      height: 500,
-      widthInches: 12,
-      heightInches: 16,
+      x: 210,
+      y: 190,
+      width: 200,
+      height: 260,
     },
-    canvasWidth: 1000,
-    canvasHeight: 1200,
   },
-  // More mockups will be added here
+  {
+    id: 'tshirt-black-front',
+    name: 'Black T-Shirt (Front)',
+    productType: 'tshirt',
+    color: 'black',
+    view: 'front',
+    imageUrl: '/mockups/tshirt-black-front.png',
+    printArea: {
+      x: 210,
+      y: 190,
+      width: 200,
+      height: 260,
+    },
+  },
+  {
+    id: 'hoodie-gray-front',
+    name: 'Gray Hoodie (Front)',
+    productType: 'hoodie',
+    color: 'gray',
+    view: 'front',
+    imageUrl: '/mockups/hoodie-gray-front.png',
+    printArea: {
+      x: 205,
+      y: 200,
+      width: 210,
+      height: 270,
+    },
+  },
+  {
+    id: 'polo-navy-front',
+    name: 'Navy Polo (Front)',
+    productType: 'polo',
+    color: 'navy',
+    view: 'front',
+    imageUrl: '/mockups/polo-navy-front.png',
+    printArea: {
+      x: 220,
+      y: 170,
+      width: 180,
+      height: 230,
+    },
+  },
+  // Add more mockups here following the same pattern
 ];
 
 /**
- * Get mockup by criteria
+ * Get Mockup by ID
+ *
+ * Retrieves a specific mockup by its unique identifier
+ *
+ * @param id - The unique mockup ID (e.g., 'sweatshirt-black-front')
+ * @returns The mockup object if found, undefined otherwise
+ *
+ * @example
+ * const mockup = getMockupById('sweatshirt-black-front');
+ * if (mockup) {
+ *   console.log(mockup.name); // "Black Sweatshirt (Front)"
+ * }
  */
-export function getMockup(
-  productType: ProductType,
-  view: MockupView,
-  color: MockupColor
-): Mockup | undefined {
-  return MOCKUPS.find(
-    (m) =>
-      m.productType === productType && m.view === view && m.color === color
-  );
+export function getMockupById(id: string): Mockup | undefined {
+  return MOCKUPS.find((mockup) => mockup.id === id);
 }
 
 /**
- * Get all mockups for a product type
+ * Get Mockups by Product Type
+ *
+ * Retrieves all mockups for a specific product type
+ *
+ * @param productType - The product type to filter by (tshirt, hoodie, polo, sweatshirt)
+ * @returns Array of mockups matching the product type
+ *
+ * @example
+ * const tshirts = getMockupsByProduct('tshirt');
+ * console.log(tshirts.length); // Number of t-shirt mockups
  */
 export function getMockupsByProduct(productType: ProductType): Mockup[] {
-  return MOCKUPS.filter((m) => m.productType === productType);
+  return MOCKUPS.filter((mockup) => mockup.productType === productType);
 }
 
 /**
- * Get available colors for a product type
+ * Get Default Mockup
+ *
+ * Returns the default mockup to show when the design studio loads.
+ * This is typically the first mockup in the array, but can be customized.
+ *
+ * @returns The default mockup object
+ *
+ * @example
+ * const defaultMockup = getDefaultMockup();
+ * console.log(defaultMockup.name); // "Black Sweatshirt (Front)"
  */
-export function getAvailableColors(productType: ProductType): MockupColor[] {
+export function getDefaultMockup(): Mockup {
+  return MOCKUPS[0];
+}
+
+/**
+ * Get Mockups by Color
+ *
+ * Retrieves all mockups for a specific color
+ *
+ * @param color - The color to filter by
+ * @returns Array of mockups matching the color
+ *
+ * @example
+ * const blackProducts = getMockupsByColor('black');
+ */
+export function getMockupsByColor(color: string): Mockup[] {
+  return MOCKUPS.filter((mockup) => mockup.color === color);
+}
+
+/**
+ * Get Mockups by View
+ *
+ * Retrieves all mockups for a specific view (front or back)
+ *
+ * @param view - The view to filter by
+ * @returns Array of mockups matching the view
+ *
+ * @example
+ * const frontViews = getMockupsByView('front');
+ */
+export function getMockupsByView(view: MockupView): Mockup[] {
+  return MOCKUPS.filter((mockup) => mockup.view === view);
+}
+
+/**
+ * Get Available Colors for Product
+ *
+ * Returns all unique colors available for a specific product type
+ *
+ * @param productType - The product type to check
+ * @returns Array of unique color names
+ *
+ * @example
+ * const tshirtColors = getAvailableColors('tshirt');
+ * console.log(tshirtColors); // ['white', 'black']
+ */
+export function getAvailableColors(productType: ProductType): string[] {
   const colors = new Set(
-    MOCKUPS.filter((m) => m.productType === productType).map((m) => m.color)
+    MOCKUPS
+      .filter((mockup) => mockup.productType === productType)
+      .map((mockup) => mockup.color)
   );
   return Array.from(colors);
 }
 
 /**
- * Get available views for a product type
+ * Get Available Product Types
+ *
+ * Returns all unique product types available in the mockups
+ *
+ * @returns Array of unique product types
+ *
+ * @example
+ * const products = getAvailableProductTypes();
+ * console.log(products); // ['sweatshirt', 'tshirt', 'hoodie', 'polo']
  */
-export function getAvailableViews(productType: ProductType): MockupView[] {
-  const views = new Set(
-    MOCKUPS.filter((m) => m.productType === productType).map((m) => m.view)
-  );
-  return Array.from(views);
+export function getAvailableProductTypes(): ProductType[] {
+  const types = new Set(MOCKUPS.map((mockup) => mockup.productType));
+  return Array.from(types);
 }
 
 /**
- * Check if logo is within print area
+ * Validate Mockup Exists
+ *
+ * Checks if a mockup exists for the given product type, color, and view
+ *
+ * @param productType - Product type
+ * @param color - Product color
+ * @param view - Mockup view
+ * @returns True if mockup exists, false otherwise
+ *
+ * @example
+ * if (mockupExists('tshirt', 'black', 'front')) {
+ *   // Mockup is available
+ * }
  */
-export function isWithinPrintArea(
-  logoX: number,
-  logoY: number,
-  logoWidth: number,
-  logoHeight: number,
-  printArea: PrintArea
+export function mockupExists(
+  productType: ProductType,
+  color: string,
+  view: MockupView
 ): boolean {
-  return (
-    logoX >= printArea.x &&
-    logoY >= printArea.y &&
-    logoX + logoWidth <= printArea.x + printArea.width &&
-    logoY + logoHeight <= printArea.y + printArea.height
+  return MOCKUPS.some(
+    (mockup) =>
+      mockup.productType === productType &&
+      mockup.color === color &&
+      mockup.view === view
   );
-}
-
-/**
- * Calculate optimal logo size for print area
- */
-export function calculateOptimalLogoSize(
-  printArea: PrintArea,
-  logoAspectRatio: number
-): { width: number; height: number } {
-  const printAspectRatio = printArea.width / printArea.height;
-
-  if (logoAspectRatio > printAspectRatio) {
-    // Logo is wider - fit to width
-    const width = printArea.width * 0.7; // 70% of print area
-    const height = width / logoAspectRatio;
-    return { width, height };
-  } else {
-    // Logo is taller - fit to height
-    const height = printArea.height * 0.7; // 70% of print area
-    const width = height * logoAspectRatio;
-    return { width, height };
-  }
 }

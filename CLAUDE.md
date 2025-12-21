@@ -31,6 +31,7 @@ GenAI-Merch is an AI-powered custom apparel design and group ordering platform t
 - **Tailwind CSS** for styling
 - **shadcn/ui** for component library
 - **Fabric.js** for interactive design canvas
+- **Zustand** for state management
 - **React Hook Form** for form management
 - **Zod** for schema validation
 
@@ -109,6 +110,142 @@ const dataURL = canvas.toDataURL({
 - JSON serialization for saving canvas state
 
 **Documentation:** http://fabricjs.com/docs/
+
+---
+
+#### Zustand (`zustand@^5.0.9`)
+**Purpose:** Lightweight state management for React applications
+
+**Use Cases:**
+- Managing AI-first design wizard flow (5-step process)
+- Global state for multi-step forms and wizards
+- Sharing state across components without prop drilling
+- Persisting user selections to localStorage
+- DevTools integration for debugging state changes
+
+**Installation:**
+```bash
+npm install zustand@^5.0.9
+```
+
+**Why Zustand over Redux/Context API:**
+- **Simpler API:** No providers, actions, or reducers
+- **Smaller bundle size:** ~1KB vs Redux's ~3KB
+- **Better performance:** Only components using state re-render
+- **Built-in persistence:** Easy localStorage integration
+- **DevTools support:** Out-of-the-box debugging
+- **TypeScript-first:** Excellent type inference
+
+**Basic Usage:**
+```typescript
+import { create } from 'zustand';
+
+interface BearStore {
+  bears: number;
+  increase: () => void;
+}
+
+const useBearStore = create<BearStore>((set) => ({
+  bears: 0,
+  increase: () => set((state) => ({ bears: state.bears + 1 })),
+}));
+
+// In component
+function BearCounter() {
+  const bears = useBearStore((state) => state.bears);
+  return <h1>{bears} bears</h1>;
+}
+```
+
+**Design Wizard Store (`lib/store/design-wizard.ts`):**
+
+Our Zustand store manages the complete AI-first design wizard flow:
+
+**State Shape:**
+```typescript
+{
+  // Navigation
+  currentStep: 1-5,           // Event Type → Products → Brand Assets → AI Chat → Canvas
+  isComplete: boolean,         // Whether wizard is finished
+
+  // Step 1: Event Type
+  eventType: EventType | null, // 'charity' | 'fundraiser' | 'company' | 'sports' | 'school' | 'personal'
+
+  // Step 2: Product Selection
+  selectedProducts: string[],  // Array of product mockup IDs
+
+  // Step 3: Brand Assets (Optional)
+  brandAssets: {
+    logos: string[],           // URLs of uploaded logos
+    colors: string[],          // Brand colors in hex format
+    fonts: string[],           // Font names or URLs
+    voice: string              // Brand voice description
+  },
+  hasBrandAssets: boolean,     // Whether user uploaded any assets
+
+  // Step 4: AI Design Generation
+  generatedDesigns: [{
+    id: string,
+    imageUrl: string,          // DALL-E 3 generated image URL
+    prompt: string,            // Original prompt
+    createdAt: Date,
+    isFavorite: boolean
+  }],
+  selectedDesignId: string | null,
+  finalDesignUrl: string | null, // Design to apply to canvas
+}
+```
+
+**Usage Example:**
+```typescript
+import { useDesignWizard } from '@/lib/store/design-wizard';
+
+function EventTypeStep() {
+  const { eventType, setEventType, nextStep } = useDesignWizard();
+
+  return (
+    <button onClick={() => {
+      setEventType('charity');
+      nextStep();
+    }}>
+      Select Charity Event
+    </button>
+  );
+}
+```
+
+**When to Use Zustand vs React State:**
+
+**Use Zustand for:**
+- ✅ Wizard/multi-step form state that persists across steps
+- ✅ Global app state (user preferences, shopping cart)
+- ✅ State shared across multiple unrelated components
+- ✅ State that needs localStorage persistence
+- ✅ Complex state with many actions/updates
+
+**Use React State (useState) for:**
+- ✅ Component-local UI state (open/closed, hover, focus)
+- ✅ Form field values (use with react-hook-form)
+- ✅ Temporary state that doesn't need persistence
+- ✅ State used by a single component and its children
+- ✅ Simple toggle states
+
+**Middleware Features:**
+
+Our store uses two Zustand middleware:
+
+1. **`persist`** - Auto-saves state to localStorage
+   - Survives page refreshes
+   - Allows users to resume where they left off
+   - Only persists essential state (excludes UI state)
+
+2. **`devtools`** - Redux DevTools integration
+   - Time-travel debugging
+   - State inspection
+   - Action logging
+   - Named as "DesignWizard" in DevTools
+
+**Documentation:** https://github.com/pmndrs/zustand
 
 ---
 

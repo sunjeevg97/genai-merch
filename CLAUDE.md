@@ -112,6 +112,561 @@ const dataURL = canvas.toDataURL({
 
 ---
 
+### Fabric.js Canvas Utilities & Design Studio Patterns
+
+#### Overview
+
+GenAI-Merch includes comprehensive canvas utilities (`@/lib/design/canvas-utils`) that wrap Fabric.js for common design studio operations. These utilities handle initialization, image loading, boundary constraints, and canvas serialization.
+
+**Location**: `src/lib/design/canvas-utils.ts`
+
+**Key Features**:
+- Type-safe wrappers for Fabric.js operations
+- Print area boundary management
+- Canvas state persistence (save/load)
+- Image export for production
+- Error handling and logging built-in
+
+#### Core Utility Functions
+
+##### 1. `initializeCanvas()`
+
+Creates and configures a Fabric.js canvas instance.
+
+```typescript
+import { initializeCanvas } from '@/lib/design/canvas-utils';
+
+// Initialize canvas with default options
+const canvas = initializeCanvas(
+  canvasElement,
+  800,
+  600,
+  {
+    backgroundColor: '#f0f0f0',
+    selectionColor: 'rgba(100, 150, 255, 0.3)',
+    selectionBorderColor: '#4a90e2',
+  }
+);
+```
+
+**Parameters**:
+- `canvasElement`: HTML canvas element
+- `width`: Canvas width in pixels
+- `height`: Canvas height in pixels
+- `options`: Optional configuration (background color, selection style)
+
+**Returns**: Configured `fabric.Canvas` instance
+
+**Throws**: Error if canvas element is null or dimensions are invalid
+
+---
+
+##### 2. `loadImageOntoCanvas()`
+
+Loads an uploaded image onto the canvas, automatically positioning it within the print area.
+
+```typescript
+import { loadImageOntoCanvas } from '@/lib/design/canvas-utils';
+import { getDefaultMockup } from '@/lib/design/mockups';
+
+const mockup = getDefaultMockup();
+const printArea = mockup.printArea;
+
+// Load user's logo
+const image = await loadImageOntoCanvas(
+  canvas,
+  uploadedImageUrl,
+  printArea
+);
+
+// Image is now centered in print area, scaled to 70% of available space
+console.log('Image loaded:', image.width, image.height);
+```
+
+**Parameters**:
+- `canvas`: Fabric.js canvas instance
+- `imageUrl`: URL or data URL of image to load
+- `printArea`: Print area boundaries `{ x, y, width, height }`
+
+**Returns**: Promise resolving to `fabric.Image` object
+
+**Behavior**:
+- Automatically scales image to fit 70% of print area
+- Centers image within print area
+- Maintains aspect ratio
+- Makes image selectable and draggable
+- Sets image as active selection
+
+---
+
+##### 3. `setupPrintAreaBounds()`
+
+Creates a visual guide showing the printable area boundaries.
+
+```typescript
+import { setupPrintAreaBounds } from '@/lib/design/canvas-utils';
+
+const bounds = setupPrintAreaBounds(canvas, printArea, {
+  stroke: '#e74c3c',
+  strokeWidth: 2,
+  fill: 'rgba(231, 76, 60, 0.1)',
+  strokeDashArray: [5, 5],
+});
+
+// Bounds rectangle is non-selectable and stays in background
+```
+
+**Parameters**:
+- `canvas`: Fabric.js canvas instance
+- `printArea`: Print area boundaries
+- `options`: Optional styling (stroke color, width, fill, dash pattern)
+
+**Returns**: `fabric.Rect` bounds rectangle
+
+**Use Case**: Visual reference for users showing where designs will print
+
+---
+
+##### 4. `constrainObjectToBounds()`
+
+Prevents objects from being dragged outside the print area.
+
+```typescript
+import { constrainObjectToBounds } from '@/lib/design/canvas-utils';
+
+// Attach to canvas movement event
+canvas.on('object:moving', (e) => {
+  if (e.target) {
+    constrainObjectToBounds(e.target, printArea);
+  }
+});
+
+// Objects will now "stick" to print area edges
+```
+
+**Parameters**:
+- `obj`: Fabric.js object being moved
+- `bounds`: Boundaries to constrain within
+
+**Behavior**:
+- Calculates object's bounding rectangle
+- Adjusts position if object extends beyond bounds
+- Updates object coordinates automatically
+
+**Use Case**: Ensure designs stay within printable area during editing
+
+---
+
+##### 5. `getCanvasAsJSON()`
+
+Exports canvas state for saving to database.
+
+```typescript
+import { getCanvasAsJSON } from '@/lib/design/canvas-utils';
+
+// Export canvas state
+const canvasJSON = getCanvasAsJSON(canvas);
+
+// Save to database
+await prisma.design.create({
+  data: {
+    userId: user.id,
+    name: 'My Design',
+    canvasData: canvasJSON,  // Store JSON string
+  },
+});
+```
+
+**Parameters**:
+- `canvas`: Fabric.js canvas instance
+
+**Returns**: JSON string containing canvas state
+
+**Includes**: All objects, properties, canvas background, custom properties
+
+---
+
+##### 6. `loadCanvasFromJSON()`
+
+Restores canvas from a previously saved state.
+
+```typescript
+import { loadCanvasFromJSON } from '@/lib/design/canvas-utils';
+
+// Load design from database
+const design = await prisma.design.findUnique({
+  where: { id: designId },
+});
+
+// Restore canvas
+await loadCanvasFromJSON(canvas, design.canvasData);
+
+// Canvas now shows saved design with all objects
+```
+
+**Parameters**:
+- `canvas`: Fabric.js canvas instance
+- `json`: JSON string from `getCanvasAsJSON()`
+
+**Returns**: Promise that resolves when canvas is loaded
+
+**Use Case**: Load saved designs for editing or viewing
+
+---
+
+##### 7. `exportCanvasAsImage()`
+
+Exports canvas as high-resolution PNG for production.
+
+```typescript
+import { exportCanvasAsImage } from '@/lib/design/canvas-utils';
+
+// Export at 2x resolution (default)
+const dataURL = exportCanvasAsImage(canvas, {
+  format: 'png',
+  quality: 1.0,
+  multiplier: 2,  // 2x resolution for print quality
+});
+
+// Convert to blob and upload
+const blob = await fetch(dataURL).then(r => r.blob());
+const file = new File([blob], 'design.png', { type: 'image/png' });
+
+// Upload to storage
+const result = await uploadDesignExport(file, userId, designId);
+```
+
+**Parameters**:
+- `canvas`: Fabric.js canvas instance
+- `options`: Export configuration
+  - `format`: 'png' or 'jpeg' (default: 'png')
+  - `quality`: 0.0 to 1.0 (default: 1.0)
+  - `multiplier`: Resolution multiplier (default: 2 for 2x)
+
+**Returns**: Base64 data URL of exported image
+
+**Use Case**: Generate final design images for Printful submission
+
+---
+
+#### Bonus Utility Functions
+
+##### Additional Helper Functions
+
+```typescript
+import {
+  clearCanvas,
+  getActiveObject,
+  removeActiveObject,
+  scaleActiveObject,
+  rotateActiveObject,
+} from '@/lib/design/canvas-utils';
+
+// Clear entire canvas
+clearCanvas(canvas);
+
+// Get currently selected object
+const activeObj = getActiveObject(canvas);
+if (activeObj) {
+  console.log('Selected:', activeObj.type);
+}
+
+// Delete selected object
+const removed = removeActiveObject(canvas);
+if (removed) {
+  console.log('Object deleted');
+}
+
+// Scale selected object
+scaleActiveObject(canvas, 1.2);  // Make 20% larger
+scaleActiveObject(canvas, 0.8);  // Make 20% smaller
+
+// Rotate selected object
+rotateActiveObject(canvas, 45);   // Rotate 45° clockwise
+rotateActiveObject(canvas, -90);  // Rotate 90° counter-clockwise
+```
+
+---
+
+#### Design Studio Workflow Pattern
+
+Here's the recommended pattern for implementing the design studio page:
+
+```typescript
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import { initializeCanvas, loadImageOntoCanvas, setupPrintAreaBounds, constrainObjectToBounds } from '@/lib/design/canvas-utils';
+import { getDefaultMockup } from '@/lib/design/mockups';
+
+export default function DesignStudioPage() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [canvas, setCanvas] = useState<fabric.Canvas | null>(null);
+  const [mockup, setMockup] = useState(getDefaultMockup());
+
+  // Step 1: Initialize canvas on mount
+  useEffect(() => {
+    if (!canvasRef.current) return;
+
+    const fabricCanvas = initializeCanvas(
+      canvasRef.current,
+      800,
+      600,
+      {
+        backgroundColor: '#ffffff',
+      }
+    );
+
+    setCanvas(fabricCanvas);
+
+    // Cleanup on unmount
+    return () => {
+      fabricCanvas.dispose();
+    };
+  }, []);
+
+  // Step 2: Setup print area bounds when mockup changes
+  useEffect(() => {
+    if (!canvas) return;
+
+    setupPrintAreaBounds(canvas, mockup.printArea);
+  }, [canvas, mockup]);
+
+  // Step 3: Add boundary constraints
+  useEffect(() => {
+    if (!canvas) return;
+
+    const handleMoving = (e: fabric.IEvent) => {
+      if (e.target) {
+        constrainObjectToBounds(e.target, mockup.printArea);
+      }
+    };
+
+    canvas.on('object:moving', handleMoving);
+
+    return () => {
+      canvas.off('object:moving', handleMoving);
+    };
+  }, [canvas, mockup]);
+
+  // Step 4: Handle file upload
+  const handleFileUploaded = async (data: UploadResultData) => {
+    if (!canvas) return;
+
+    try {
+      const image = await loadImageOntoCanvas(
+        canvas,
+        data.publicUrl,
+        mockup.printArea
+      );
+      console.log('Logo loaded onto canvas');
+    } catch (error) {
+      console.error('Failed to load image:', error);
+    }
+  };
+
+  return (
+    <div>
+      <canvas ref={canvasRef} />
+      <FileUpload onFileUploaded={handleFileUploaded} />
+    </div>
+  );
+}
+```
+
+---
+
+#### Best Practices
+
+**1. Canvas Initialization**
+- Always initialize canvas in `useEffect` to avoid SSR issues
+- Store canvas instance in state for access across component
+- Clean up canvas on unmount with `canvas.dispose()`
+
+**2. Event Handling**
+- Attach event listeners in `useEffect` with cleanup
+- Use `canvas.on()` and `canvas.off()` for proper subscription management
+- Common events: `object:moving`, `object:scaling`, `object:rotating`, `selection:created`, `selection:cleared`
+
+**3. Print Area Management**
+- Load mockup data from `@/lib/design/mockups`
+- Always setup print area bounds for user guidance
+- Enforce boundary constraints on object movement
+- Update bounds when user switches mockups
+
+**4. Image Loading**
+- Use `crossOrigin: 'anonymous'` to avoid CORS issues
+- Handle Promise rejection for failed image loads
+- Show loading state during image load
+- Center and scale images automatically with `loadImageOntoCanvas()`
+
+**5. State Persistence**
+- Save canvas JSON to database regularly (auto-save)
+- Include `getCanvasAsJSON()` in save operations
+- Load canvas state with `loadCanvasFromJSON()` on page load
+- Store both canvas JSON (editable) and exported PNG (final)
+
+**6. Export for Production**
+- Always export at 2x or higher resolution (`multiplier: 2`)
+- Use PNG format for designs with transparency
+- Convert data URL to blob before uploading to storage
+- Validate exported image meets print quality requirements (DPI, dimensions)
+
+**7. Error Handling**
+- Wrap all canvas operations in try-catch blocks
+- Check for null canvas before operations
+- Provide user feedback for errors (file load failures, etc.)
+- Log errors for debugging
+
+**8. Performance**
+- Limit canvas size to reasonable dimensions (avoid 10000x10000px)
+- Use `canvas.renderAll()` sparingly - built-in to most operations
+- Debounce auto-save to avoid excessive database writes
+- Consider disabling object caching for dynamic designs: `obj.set({ objectCaching: false })`
+
+---
+
+#### Common Patterns
+
+**Auto-Save Pattern**:
+```typescript
+import { getCanvasAsJSON } from '@/lib/design/canvas-utils';
+import { useDebounce } from '@/hooks/useDebounce';
+
+function DesignCanvas({ designId }: { designId: string }) {
+  const [canvas, setCanvas] = useState<fabric.Canvas | null>(null);
+
+  // Auto-save on canvas changes
+  useEffect(() => {
+    if (!canvas) return;
+
+    const handleModified = useDebounce(async () => {
+      const canvasJSON = getCanvasAsJSON(canvas);
+
+      await fetch(`/api/designs/${designId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ canvasData: canvasJSON }),
+      });
+
+      console.log('Design auto-saved');
+    }, 2000); // Save 2 seconds after last change
+
+    canvas.on('object:modified', handleModified);
+    canvas.on('object:added', handleModified);
+    canvas.on('object:removed', handleModified);
+
+    return () => {
+      canvas.off('object:modified', handleModified);
+      canvas.off('object:added', handleModified);
+      canvas.off('object:removed', handleModified);
+    };
+  }, [canvas, designId]);
+
+  return <canvas ref={canvasRef} />;
+}
+```
+
+**Mockup Switcher Pattern**:
+```typescript
+import { MOCKUPS } from '@/lib/design/mockups';
+
+function MockupSelector({ onMockupChange }) {
+  return (
+    <div>
+      {MOCKUPS.map((mockup) => (
+        <button
+          key={mockup.id}
+          onClick={() => onMockupChange(mockup)}
+        >
+          {mockup.name}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// In parent component:
+const handleMockupChange = (newMockup: Mockup) => {
+  setMockup(newMockup);
+
+  // Optionally clear canvas or adjust existing designs
+  // clearCanvas(canvas);
+
+  // Or preserve designs and update bounds
+  if (canvas) {
+    setupPrintAreaBounds(canvas, newMockup.printArea);
+  }
+};
+```
+
+**Undo/Redo Pattern**:
+```typescript
+function useCanvasHistory(canvas: fabric.Canvas | null) {
+  const [history, setHistory] = useState<string[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+
+  const saveState = () => {
+    if (!canvas) return;
+    const json = getCanvasAsJSON(canvas);
+    setHistory(prev => [...prev.slice(0, historyIndex + 1), json]);
+    setHistoryIndex(prev => prev + 1);
+  };
+
+  const undo = async () => {
+    if (historyIndex > 0 && canvas) {
+      const newIndex = historyIndex - 1;
+      await loadCanvasFromJSON(canvas, history[newIndex]);
+      setHistoryIndex(newIndex);
+    }
+  };
+
+  const redo = async () => {
+    if (historyIndex < history.length - 1 && canvas) {
+      const newIndex = historyIndex + 1;
+      await loadCanvasFromJSON(canvas, history[newIndex]);
+      setHistoryIndex(newIndex);
+    }
+  };
+
+  return { saveState, undo, redo, canUndo: historyIndex > 0, canRedo: historyIndex < history.length - 1 };
+}
+```
+
+---
+
+#### Troubleshooting
+
+**Issue: Canvas is blank after initialization**
+- Ensure canvas element exists before calling `initializeCanvas()`
+- Check that canvas width/height are positive numbers
+- Verify canvas is visible in DOM (not `display: none`)
+
+**Issue: Images not loading**
+- Check CORS headers on image URLs
+- Verify image URLs are accessible
+- Use `crossOrigin: 'anonymous'` in `loadImageOntoCanvas()`
+- Check browser console for CORS or 404 errors
+
+**Issue: Objects can be dragged outside bounds**
+- Ensure `constrainObjectToBounds()` is attached to `object:moving` event
+- Verify print area coordinates are correct
+- Check that event listener is not being removed prematurely
+
+**Issue: Canvas state not persisting**
+- Verify `getCanvasAsJSON()` is called before save
+- Check that JSON string is being stored in database
+- Ensure custom properties are included in `toJSON()` call
+- Verify `loadCanvasFromJSON()` is awaited
+
+**Issue: Exported images are low quality**
+- Increase `multiplier` option (default: 2, try 3 or 4)
+- Use `format: 'png'` for better quality than JPEG
+- Set `quality: 1.0` for maximum quality
+- Check source image resolution before export
+
+---
+
 #### Sharp (`sharp@^0.34.5`)
 **Purpose:** High-performance Node.js image processing for server-side validation and optimization
 

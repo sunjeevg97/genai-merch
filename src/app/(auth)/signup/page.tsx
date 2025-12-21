@@ -117,7 +117,7 @@ export default function SignUpPage() {
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold">Create an account</CardTitle>
           <CardDescription>
-            Enter your information to create your GenAI-Merch account
+            Enter your information to create your Regalia account
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleSignUp}>

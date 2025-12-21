@@ -13,9 +13,8 @@
 
 import { useDesignWizard, WizardStep } from '@/lib/store/design-wizard';
 import { EventTypeStep } from '@/components/design/steps/event-type-step';
-import { ProductSelectionStep } from '@/components/design/steps/product-selection-step';
+import { ProductStep } from '@/components/design/steps/product-step';
 import { BrandAssetsStep } from '@/components/design/steps/brand-assets-step';
-import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 
@@ -60,7 +59,7 @@ export default function CreateDesignPage() {
       case WizardStep.EventType:
         return <EventTypeStep />;
       case WizardStep.Products:
-        return <ProductSelectionStep />;
+        return <ProductStep />;
       case WizardStep.BrandAssets:
         return <BrandAssetsStep />;
       case WizardStep.AiChat:

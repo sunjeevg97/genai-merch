@@ -102,12 +102,12 @@ export interface Mockup {
  */
 export const MOCKUPS: Mockup[] = [
   {
-    id: 'sweatshirt-black-front',
-    name: 'Black Sweatshirt (Front)',
+    id: 'sweatshirt-white-front',
+    name: 'White Sweatshirt (Front)',
     productType: 'sweatshirt',
-    color: 'black',
+    color: 'white',
     view: 'front',
-    imageUrl: '/mockups/sweatshirt-black-front.png',
+    imageUrl: '/mockups/sweatshirt-white-front.png',
     printArea: {
       x: 200,    // Adjust based on your mockup image
       y: 180,    // Adjust based on your mockup image

@@ -128,7 +128,7 @@ export async function loadImageOntoCanvas(
 
       fabric.Image.fromURL(
         imageUrl,
-        (img) => {
+        (img: fabric.Image) => {
           if (!img || !img.width || !img.height) {
             reject(new Error('Failed to load image'));
             return;

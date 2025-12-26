@@ -15,6 +15,7 @@ import { useDesignWizard, WizardStep } from '@/lib/store/design-wizard';
 import { EventTypeStep } from '@/components/design/steps/event-type-step';
 import { ProductStep } from '@/components/design/steps/product-step';
 import { BrandAssetsStep } from '@/components/design/steps/brand-assets-step';
+import { AiChatStep } from '@/components/design/steps/ai-chat-step';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 
@@ -63,7 +64,7 @@ export default function CreateDesignPage() {
       case WizardStep.BrandAssets:
         return <BrandAssetsStep />;
       case WizardStep.AiChat:
-        return <div className="text-center text-muted-foreground">AI Chat Step (Coming soon)</div>;
+        return <AiChatStep />;
       case WizardStep.Canvas:
         return <div className="text-center text-muted-foreground">Canvas Step (Coming soon)</div>;
       default:

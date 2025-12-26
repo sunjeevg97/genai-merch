@@ -191,14 +191,7 @@ export function ProductStep() {
                     }}
                   />
                   {/* Fallback gradient when image is missing */}
-                  <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
-                    <span className="text-4xl opacity-50">
-                      {product.category === 'apparel' && '👕'}
-                      {product.category === 'drinkware' && '☕'}
-                      {product.category === 'stationery' && '✏️'}
-                      {product.category === 'accessories' && '🎒'}
-                    </span>
-                  </div>
+                  <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-primary/5" />
                 </div>
 
                 {/* Checkbox and Title */}

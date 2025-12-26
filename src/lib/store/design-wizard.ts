@@ -293,6 +293,12 @@ export interface DesignWizardState {
   removeColor: (color: string) => void;
 
   /**
+   * Set all brand colors at once
+   * @param colors - Array of hex color codes
+   */
+  setColors: (colors: string[]) => void;
+
+  /**
    * Set brand fonts
    * @param fonts - Array of font names
    */
@@ -521,6 +527,16 @@ export const useDesignWizard = create<DesignWizardState>()(
             brandAssets: {
               ...brandAssets,
               colors: brandAssets.colors.filter(c => c !== color),
+            },
+          });
+        },
+
+        setColors: (colors: string[]) => {
+          const { brandAssets } = get();
+          set({
+            brandAssets: {
+              ...brandAssets,
+              colors,
             },
           });
         },

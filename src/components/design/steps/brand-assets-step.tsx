@@ -2,13 +2,13 @@
  * Brand Assets Step
  *
  * Third step in the AI-first design wizard (OPTIONAL).
- * Users can upload brand assets (logos, colors, fonts, voice) to inform AI design generation.
+ * Users can upload brand assets to inform AI design generation.
  * This step can be skipped entirely.
  */
 
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useDesignWizard } from '@/lib/store/design-wizard';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,14 +16,24 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useDropzone } from 'react-dropzone';
-import { Upload, X, Plus, Palette } from 'lucide-react';
+import { Upload, X, Plus, Loader2 } from 'lucide-react';
 import Image from 'next/image';
+import { toast } from 'sonner';
+import { uploadDesignFile } from '@/lib/supabase/storage';
+import { createBrowserClient } from '@/lib/supabase/client';
+
+/**
+ * Uploaded Logo Interface
+ */
+interface UploadedLogo {
+  id: string;
+  url: string;
+  filename: string;
+  isUploading?: boolean;
+}
 
 /**
  * Brand Assets Step Component
- *
- * Allows users to upload brand materials to maintain consistency in AI-generated designs.
- * All fields are optional - users can skip this step entirely.
  *
  * @example
  * ```tsx
@@ -35,48 +45,127 @@ export function BrandAssetsStep() {
     brandAssets,
     addLogo,
     removeLogo,
-    addColor,
-    removeColor,
-    setFonts,
     setVoice,
     completeBrandAssets,
     nextStep,
     previousStep,
   } = useDesignWizard();
 
-  // Local state for form inputs
-  const [colorInput, setColorInput] = useState('');
-  const [fontsInput, setFontsInput] = useState(brandAssets.fonts.join(', '));
-  const [voiceInput, setVoiceInput] = useState(brandAssets.voice);
+  // Local state
+  const [uploadedLogos, setUploadedLogos] = useState<UploadedLogo[]>([]);
+  const [colors, setColors] = useState<string[]>(brandAssets.colors);
+  const [voice, setVoiceInput] = useState(brandAssets.voice);
   const [isUploading, setIsUploading] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+
+  // Character counter
+  const maxVoiceChars = 500;
+  const remainingChars = maxVoiceChars - voice.length;
+
+  /**
+   * Get current user ID
+   */
+  useEffect(() => {
+    const getUser = async () => {
+      const supabase = createBrowserClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUserId(user.id);
+      }
+    };
+    getUser();
+  }, []);
+
+  /**
+   * Initialize uploaded logos from Zustand store
+   */
+  useEffect(() => {
+    if (brandAssets.logos.length > 0) {
+      setUploadedLogos(
+        brandAssets.logos.map((url, index) => ({
+          id: `${index}`,
+          url,
+          filename: url.split('/').pop() || `logo-${index}`,
+        }))
+      );
+    }
+  }, []);
 
   /**
    * Handle logo file drop
-   * TODO: Implement Supabase Storage upload
-   * For now, creates local object URLs
    */
   const onDrop = useCallback(
-    async (acceptedFiles: File[]) => {
+    async (acceptedFiles: File[], rejectedFiles: any[]) => {
+      // Handle rejected files
+      if (rejectedFiles.length > 0) {
+        rejectedFiles.forEach((rejected) => {
+          const error = rejected.errors[0];
+          if (error.code === 'file-too-large') {
+            toast.error(`${rejected.file.name} is too large. Max size is 5MB.`);
+          } else if (error.code === 'file-invalid-type') {
+            toast.error(`${rejected.file.name} is not a valid file type. Use PNG, JPG, or SVG.`);
+          } else {
+            toast.error(`${rejected.file.name} was rejected.`);
+          }
+        });
+      }
+
+      // Check if we're at the limit
+      if (uploadedLogos.length + acceptedFiles.length > 5) {
+        toast.error('Maximum 5 logos allowed');
+        return;
+      }
+
+      if (!userId) {
+        toast.error('Please sign in to upload files');
+        return;
+      }
+
       setIsUploading(true);
 
-      try {
-        for (const file of acceptedFiles) {
-          // TODO: Upload to Supabase Storage
-          // const { data, error } = await supabase.storage
-          //   .from('brand-assets')
-          //   .upload(`logos/${userId}/${file.name}`, file);
+      // Upload each file
+      for (const file of acceptedFiles) {
+        const tempId = `temp-${Date.now()}-${Math.random()}`;
 
-          // For now, create a local object URL for preview
-          const objectUrl = URL.createObjectURL(file);
-          addLogo(objectUrl);
+        // Add placeholder
+        setUploadedLogos((prev) => [
+          ...prev,
+          {
+            id: tempId,
+            url: URL.createObjectURL(file),
+            filename: file.name,
+            isUploading: true,
+          },
+        ]);
+
+        try {
+          const result = await uploadDesignFile(file, userId);
+
+          if (result.success && result.url) {
+            // Update with actual URL
+            setUploadedLogos((prev) =>
+              prev.map((logo) =>
+                logo.id === tempId
+                  ? { ...logo, url: result.url!, isUploading: false }
+                  : logo
+              )
+            );
+            addLogo(result.url);
+            toast.success(`${file.name} uploaded successfully`);
+          } else {
+            // Remove failed upload
+            setUploadedLogos((prev) => prev.filter((logo) => logo.id !== tempId));
+            toast.error(result.error || `Failed to upload ${file.name}`);
+          }
+        } catch (error) {
+          setUploadedLogos((prev) => prev.filter((logo) => logo.id !== tempId));
+          toast.error(`Error uploading ${file.name}`);
         }
-      } catch (error) {
-        console.error('Error uploading logo:', error);
-      } finally {
-        setIsUploading(false);
       }
+
+      setIsUploading(false);
     },
-    [addLogo]
+    [uploadedLogos, userId, addLogo]
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -86,49 +175,72 @@ export function BrandAssetsStep() {
       'image/jpeg': ['.jpg', '.jpeg'],
       'image/svg+xml': ['.svg'],
     },
+    maxSize: 5 * 1024 * 1024, // 5MB
     maxFiles: 5,
+    disabled: isUploading || uploadedLogos.length >= 5,
   });
 
   /**
-   * Handle adding a brand color
+   * Remove uploaded logo
    */
-  const handleAddColor = () => {
-    if (colorInput && /^#[0-9A-Fa-f]{6}$/.test(colorInput)) {
-      addColor(colorInput);
-      setColorInput('');
+  const handleRemoveLogo = (logoId: string) => {
+    const logo = uploadedLogos.find((l) => l.id === logoId);
+    if (logo) {
+      setUploadedLogos((prev) => prev.filter((l) => l.id !== logoId));
+      removeLogo(logo.url);
+      toast.success('Logo removed');
     }
   };
 
   /**
-   * Handle Continue button
-   * Saves fonts and voice, marks step as complete
+   * Add color
    */
-  const handleContinue = () => {
-    // Parse fonts from comma-separated input
-    const fonts = fontsInput
-      .split(',')
-      .map((f) => f.trim())
-      .filter((f) => f.length > 0);
-    setFonts(fonts);
-    setVoice(voiceInput);
+  const handleAddColor = () => {
+    if (colors.length >= 6) {
+      toast.error('Maximum 6 colors allowed');
+      return;
+    }
+    setColors([...colors, '#000000']);
+  };
 
-    // Check if user provided any assets
-    const hasAssets =
-      brandAssets.logos.length > 0 ||
-      brandAssets.colors.length > 0 ||
-      fonts.length > 0 ||
-      voiceInput.trim().length > 0;
+  /**
+   * Update color at index
+   */
+  const handleColorChange = (index: number, newColor: string) => {
+    const newColors = [...colors];
+    newColors[index] = newColor;
+    setColors(newColors);
+  };
 
-    completeBrandAssets(hasAssets);
-    nextStep();
+  /**
+   * Remove color at index
+   */
+  const handleRemoveColor = (index: number) => {
+    setColors(colors.filter((_, i) => i !== index));
   };
 
   /**
    * Handle Skip button
-   * Advances without saving, marks as not having assets
    */
   const handleSkip = () => {
     completeBrandAssets(false);
+    nextStep();
+  };
+
+  /**
+   * Handle Continue button
+   */
+  const handleContinue = () => {
+    // Save voice to store
+    setVoice(voice);
+
+    // Check if user provided any assets
+    const hasAssets =
+      uploadedLogos.length > 0 ||
+      colors.length > 0 ||
+      voice.trim().length > 0;
+
+    completeBrandAssets(hasAssets);
     nextStep();
   };
 
@@ -143,73 +255,89 @@ export function BrandAssetsStep() {
       </div>
 
       <div className="space-y-6">
-        {/* Logo Upload */}
+        {/* Logo Upload Section */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Upload className="h-5 w-5" />
-              Brand Logos
+              Brand Logos ({uploadedLogos.length}/5)
             </CardTitle>
             <CardDescription>
-              Upload your logo files (PNG, JPG, or SVG)
+              Upload your logo files (PNG, JPG, or SVG, max 5MB each)
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Dropzone */}
-            <div
-              {...getRootProps()}
-              className={`
-                border-2 border-dashed rounded-lg p-8
-                text-center cursor-pointer
-                transition-colors duration-200
-                ${isDragActive ? 'border-primary bg-primary/5' : 'border-border'}
-                ${isUploading ? 'opacity-50 cursor-not-allowed' : 'hover:border-primary'}
-              `}
-            >
-              <input {...getInputProps()} disabled={isUploading} />
-              <Upload className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
-              {isDragActive ? (
-                <p className="text-sm text-muted-foreground">Drop your logo files here...</p>
-              ) : (
-                <div className="space-y-1">
-                  <p className="text-sm font-medium">
-                    {isUploading ? 'Uploading...' : 'Drag & drop logo files here'}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    or click to browse (PNG, JPG, SVG - max 5 files)
-                  </p>
-                </div>
-              )}
-            </div>
+            {uploadedLogos.length < 5 && (
+              <div
+                {...getRootProps()}
+                className={`
+                  border-2 border-dashed rounded-lg p-8
+                  text-center cursor-pointer
+                  transition-all duration-200
+                  ${isDragActive ? 'border-primary bg-primary/5 scale-105' : 'border-border'}
+                  ${isUploading || uploadedLogos.length >= 5 ? 'opacity-50 cursor-not-allowed' : 'hover:border-primary hover:bg-primary/5'}
+                `}
+              >
+                <input {...getInputProps()} />
+                <Upload className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
+                {isDragActive ? (
+                  <p className="text-sm text-primary font-medium">Drop your logo files here...</p>
+                ) : isUploading ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <p className="text-sm font-medium">Uploading...</p>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">
+                      Drag & drop logo files here
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      or click to browse (PNG, JPG, SVG - max 5MB, up to 5 files)
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Logo Previews */}
-            {brandAssets.logos.length > 0 && (
+            {uploadedLogos.length > 0 && (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                {brandAssets.logos.map((logoUrl, index) => (
+                {uploadedLogos.map((logo) => (
                   <div
-                    key={index}
+                    key={logo.id}
                     className="relative aspect-square bg-muted rounded-lg overflow-hidden group"
                   >
-                    <Image
-                      src={logoUrl}
-                      alt={`Logo ${index + 1}`}
-                      fill
-                      className="object-contain p-2"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeLogo(logoUrl)}
-                      className="
-                        absolute top-2 right-2
-                        bg-destructive text-destructive-foreground
-                        rounded-full p-1
-                        opacity-0 group-hover:opacity-100
-                        transition-opacity duration-200
-                      "
-                      aria-label="Remove logo"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
+                    {logo.isUploading ? (
+                      <div className="absolute inset-0 flex items-center justify-center bg-muted">
+                        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : (
+                      <>
+                        <Image
+                          src={logo.url}
+                          alt={logo.filename}
+                          fill
+                          className="object-contain p-2"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveLogo(logo.id)}
+                          className="
+                            absolute top-2 right-2
+                            bg-destructive text-destructive-foreground
+                            rounded-full p-1
+                            opacity-0 group-hover:opacity-100
+                            transition-opacity duration-200
+                            hover:scale-110
+                          "
+                          aria-label="Remove logo"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </>
+                    )}
                   </div>
                 ))}
               </div>
@@ -217,99 +345,66 @@ export function BrandAssetsStep() {
           </CardContent>
         </Card>
 
-        {/* Brand Colors */}
+        {/* Brand Colors Section */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Palette className="h-5 w-5" />
-              Brand Colors
-            </CardTitle>
+            <CardTitle>Brand Colors ({colors.length}/6)</CardTitle>
             <CardDescription>
-              Add your brand colors in hex format (e.g., #FF5733)
+              Add your brand colors to maintain consistency
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Color Input */}
-            <div className="flex gap-2">
-              <Input
-                type="text"
-                placeholder="#FF5733"
-                value={colorInput}
-                onChange={(e) => setColorInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleAddColor();
-                  }
-                }}
-                className="flex-1"
-              />
-              <Button
-                type="button"
-                onClick={handleAddColor}
-                variant="outline"
-                size="icon"
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-            </div>
-
-            {/* Color Swatches */}
-            {brandAssets.colors.length > 0 && (
-              <div className="flex flex-wrap gap-3">
-                {brandAssets.colors.map((color, index) => (
-                  <div
-                    key={index}
-                    className="group relative"
-                  >
-                    <div
-                      className="h-12 w-12 rounded-lg border-2 border-border shadow-sm"
-                      style={{ backgroundColor: color }}
+            {/* Color Pickers */}
+            {colors.length > 0 && (
+              <div className="space-y-3">
+                {colors.map((color, index) => (
+                  <div key={index} className="flex items-center gap-3">
+                    <div className="relative">
+                      <Input
+                        type="color"
+                        value={color}
+                        onChange={(e) => handleColorChange(index, e.target.value)}
+                        className="h-12 w-20 cursor-pointer"
+                      />
+                    </div>
+                    <Input
+                      type="text"
+                      value={color}
+                      onChange={(e) => handleColorChange(index, e.target.value)}
+                      placeholder="#000000"
+                      className="flex-1 font-mono"
+                      maxLength={7}
                     />
-                    <button
+                    <Button
                       type="button"
-                      onClick={() => removeColor(color)}
-                      className="
-                        absolute -top-2 -right-2
-                        bg-destructive text-destructive-foreground
-                        rounded-full p-1
-                        opacity-0 group-hover:opacity-100
-                        transition-opacity duration-200
-                        shadow-md
-                      "
-                      aria-label={`Remove ${color}`}
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleRemoveColor(index)}
+                      className="text-destructive hover:text-destructive"
                     >
-                      <X className="h-3 w-3" />
-                    </button>
-                    <p className="text-xs text-center mt-1 text-muted-foreground">
-                      {color}
-                    </p>
+                      <X className="h-4 w-4" />
+                    </Button>
                   </div>
                 ))}
               </div>
             )}
+
+            {/* Add Color Button */}
+            {colors.length < 6 && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleAddColor}
+                className="w-full"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                {colors.length === 0 ? 'Add Brand Color' : 'Add Another Color'}
+              </Button>
+            )}
           </CardContent>
         </Card>
 
-        {/* Brand Fonts */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Brand Fonts</CardTitle>
-            <CardDescription>
-              Enter font names separated by commas (e.g., Roboto, Open Sans)
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Input
-              type="text"
-              placeholder="Roboto, Open Sans, Montserrat"
-              value={fontsInput}
-              onChange={(e) => setFontsInput(e.target.value)}
-            />
-          </CardContent>
-        </Card>
-
-        {/* Brand Voice */}
+        {/* Brand Voice Section */}
         <Card>
           <CardHeader>
             <CardTitle>Brand Voice & Tone</CardTitle>
@@ -318,12 +413,26 @@ export function BrandAssetsStep() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Textarea
-              placeholder="e.g., Professional and authoritative, Fun and playful, Innovative and tech-forward..."
-              value={voiceInput}
-              onChange={(e) => setVoiceInput(e.target.value)}
-              rows={4}
-            />
+            <div className="space-y-2">
+              <Textarea
+                placeholder="e.g., Fun and playful, Professional and modern, Bold and energetic..."
+                value={voice}
+                onChange={(e) => setVoiceInput(e.target.value.slice(0, maxVoiceChars))}
+                rows={4}
+                maxLength={maxVoiceChars}
+              />
+              <div className="flex justify-end">
+                <span
+                  className={`text-xs ${
+                    remainingChars < 50
+                      ? 'text-destructive'
+                      : 'text-muted-foreground'
+                  }`}
+                >
+                  {remainingChars} characters remaining
+                </span>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -335,26 +444,15 @@ export function BrandAssetsStep() {
 
       {/* Navigation Buttons */}
       <div className="flex justify-between items-center pt-4">
-        <Button
-          variant="outline"
-          onClick={previousStep}
-          type="button"
-        >
+        <Button variant="outline" onClick={previousStep} type="button">
           Back
         </Button>
 
         <div className="flex gap-3">
-          <Button
-            variant="ghost"
-            onClick={handleSkip}
-            type="button"
-          >
+          <Button variant="ghost" onClick={handleSkip} type="button">
             Skip this step
           </Button>
-          <Button
-            onClick={handleContinue}
-            type="button"
-          >
+          <Button onClick={handleContinue} type="button">
             Continue to AI Chat
           </Button>
         </div>

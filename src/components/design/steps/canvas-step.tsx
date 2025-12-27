@@ -14,7 +14,7 @@
 
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useDesignWizard } from '@/lib/store/design-wizard';
 import {
   initializeCanvas,
@@ -93,6 +93,11 @@ export function CanvasStep() {
   const [userId, setUserId] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [hasLoadedDesign, setHasLoadedDesign] = useState(false);
+
+  // Memoize first brand logo to prevent re-render issues
+  const firstBrandLogo = useMemo(() => {
+    return brandAssets.logos[0] || null;
+  }, [brandAssets.logos[0]]);
 
   /**
    * Get current user ID
@@ -180,7 +185,7 @@ export function CanvasStep() {
    * Load AI-generated design or brand logo when canvas is ready
    */
   useEffect(() => {
-    if (!canvasInstanceRef.current || !mockup || hasLoadedDesign) return;
+    if (!isInitialized || !canvasInstanceRef.current || !mockup || hasLoadedDesign) return;
 
     const loadDesignImage = async () => {
       const canvas = canvasInstanceRef.current;
@@ -195,8 +200,8 @@ export function CanvasStep() {
           console.log('[Canvas Step] Loading AI-generated design');
         }
         // Priority 2: Use first brand logo if available
-        else if (brandAssets.logos.length > 0) {
-          imageUrl = brandAssets.logos[0];
+        else if (firstBrandLogo) {
+          imageUrl = firstBrandLogo;
           console.log('[Canvas Step] Loading brand logo');
         }
 
@@ -212,7 +217,7 @@ export function CanvasStep() {
     };
 
     loadDesignImage();
-  }, [isInitialized, mockup, finalDesignUrl, brandAssets.logos, hasLoadedDesign]);
+  }, [isInitialized, mockup, finalDesignUrl, firstBrandLogo, hasLoadedDesign]);
 
   /**
    * Add boundary constraints on object movement

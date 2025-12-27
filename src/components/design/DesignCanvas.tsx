@@ -206,6 +206,40 @@ export function DesignCanvas({
   }, [isCanvasReady, mockup]);
 
   /**
+   * Update design state from canvas objects
+   * Debounced to avoid excessive calls
+   */
+  const updateDesignStateFromCanvas = useCallback(() => {
+    if (!fabricCanvasRef.current || !logoObjectRef.current) return;
+
+    const logo = logoObjectRef.current;
+
+    const newState: DesignState = {
+      logoX: logo.left || 0,
+      logoY: logo.top || 0,
+      logoWidth: (logo.width || 0) * (logo.scaleX || 1),
+      logoHeight: (logo.height || 0) * (logo.scaleY || 1),
+      logoRotation: logo.angle || 0,
+      logoScaleX: logo.scaleX || 1,
+      logoScaleY: logo.scaleY || 1,
+      isFlipped: logo.flipX || false,
+    };
+
+    setDesignState(newState);
+
+    // Debounce callback to parent
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    debounceTimerRef.current = setTimeout(() => {
+      if (onDesignChange) {
+        onDesignChange(newState);
+      }
+    }, 300); // 300ms debounce
+  }, [onDesignChange]);
+
+  /**
    * Load uploaded logo when uploadedImageUrl changes
    */
   useEffect(() => {
@@ -239,7 +273,7 @@ export function DesignCanvas({
         setIsLoadingLogo(false);
         toast.error('Failed to load logo onto canvas');
       });
-  }, [isCanvasReady, uploadedImageUrl, mockup.printArea]);
+  }, [isCanvasReady, uploadedImageUrl, mockup.printArea, updateDesignStateFromCanvas]);
 
   /**
    * Setup event handlers for canvas interactions
@@ -289,41 +323,7 @@ export function DesignCanvas({
       canvas.off('object:scaling', handleScaling);
       canvas.off('object:rotating', handleModified);
     };
-  }, [isCanvasReady, mockup.printArea]);
-
-  /**
-   * Update design state from canvas objects
-   * Debounced to avoid excessive calls
-   */
-  const updateDesignStateFromCanvas = useCallback(() => {
-    if (!fabricCanvasRef.current || !logoObjectRef.current) return;
-
-    const logo = logoObjectRef.current;
-
-    const newState: DesignState = {
-      logoX: logo.left || 0,
-      logoY: logo.top || 0,
-      logoWidth: (logo.width || 0) * (logo.scaleX || 1),
-      logoHeight: (logo.height || 0) * (logo.scaleY || 1),
-      logoRotation: logo.angle || 0,
-      logoScaleX: logo.scaleX || 1,
-      logoScaleY: logo.scaleY || 1,
-      isFlipped: logo.flipX || false,
-    };
-
-    setDesignState(newState);
-
-    // Debounce callback to parent
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-    }
-
-    debounceTimerRef.current = setTimeout(() => {
-      if (onDesignChange) {
-        onDesignChange(newState);
-      }
-    }, 300); // 300ms debounce
-  }, [onDesignChange]);
+  }, [isCanvasReady, mockup.printArea, updateDesignStateFromCanvas]);
 
   /**
    * Center logo in print area

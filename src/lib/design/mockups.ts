@@ -102,76 +102,61 @@ export interface Mockup {
  */
 export const MOCKUPS: Mockup[] = [
   {
-    id: 'sweatshirt-white-front',
-    name: 'White Sweatshirt (Front)',
+    id: 'tshirt-front',
+    name: 'T-Shirt',
+    productType: 'tshirt',
+    color: 'white',
+    view: 'front',
+    imageUrl: '/products/t-shirt.png',
+    printArea: {
+      x: 150,
+      y: 120,
+      width: 300,
+      height: 350,
+    },
+  },
+  {
+    id: 'sweatshirt-front',
+    name: 'Sweatshirt',
     productType: 'sweatshirt',
     color: 'white',
     view: 'front',
-    imageUrl: '/mockups/sweatshirt-white-front.png',
+    imageUrl: '/products/sweatshirt.png',
     printArea: {
-      x: 200,    // Adjust based on your mockup image
-      y: 180,    // Adjust based on your mockup image
-      width: 200,
-      height: 250,
+      x: 150,
+      y: 140,
+      width: 300,
+      height: 350,
     },
   },
   {
-    id: 'tshirt-white-front',
-    name: 'White T-Shirt (Front)',
-    productType: 'tshirt',
-    color: 'white',
-    view: 'front',
-    imageUrl: '/mockups/tshirt-white-front.png',
-    printArea: {
-      x: 210,
-      y: 190,
-      width: 200,
-      height: 260,
-    },
-  },
-  {
-    id: 'tshirt-black-front',
-    name: 'Black T-Shirt (Front)',
-    productType: 'tshirt',
-    color: 'black',
-    view: 'front',
-    imageUrl: '/mockups/tshirt-black-front.png',
-    printArea: {
-      x: 210,
-      y: 190,
-      width: 200,
-      height: 260,
-    },
-  },
-  {
-    id: 'hoodie-gray-front',
-    name: 'Gray Hoodie (Front)',
+    id: 'hoodie-front',
+    name: 'Hoodie',
     productType: 'hoodie',
     color: 'gray',
     view: 'front',
-    imageUrl: '/mockups/hoodie-gray-front.png',
+    imageUrl: '/products/hoodie.png',
     printArea: {
-      x: 205,
-      y: 200,
-      width: 210,
-      height: 270,
+      x: 150,
+      y: 160,
+      width: 300,
+      height: 350,
     },
   },
   {
-    id: 'polo-navy-front',
-    name: 'Navy Polo (Front)',
+    id: 'polo-front',
+    name: 'Polo Shirt',
     productType: 'polo',
     color: 'navy',
     view: 'front',
-    imageUrl: '/mockups/polo-navy-front.png',
+    imageUrl: '/products/t-shirt.png', // Using t-shirt as polo placeholder
     printArea: {
-      x: 220,
-      y: 170,
-      width: 180,
-      height: 230,
+      x: 150,
+      y: 120,
+      width: 300,
+      height: 350,
     },
   },
-  // Add more mockups here following the same pattern
 ];
 
 /**

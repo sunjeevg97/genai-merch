@@ -958,6 +958,427 @@ export function LogoUpload({ onUpload }: { onUpload: (file: File) => void }) {
 
 ---
 
+## AI Prompt System
+
+GenAI-Merch uses a sophisticated prompt building system to optimize interactions with OpenAI's GPT-4 (chat) and DALL-E 3 (image generation) APIs.
+
+**Location**: `src/lib/ai/prompts.ts`
+
+### Overview
+
+The prompt system provides two main functions:
+1. **Chat System Prompts** - Guide GPT-4 to act as a design assistant
+2. **Image Generation Prompts** - Optimize DALL-E 3 to create print-ready merchandise designs
+
+Both functions incorporate contextual information from the design wizard:
+- Event type (charity, sports, company, etc.)
+- Selected products (t-shirts, mugs, etc.)
+- Brand assets (colors, fonts, voice)
+
+### Core Functions
+
+#### 1. `buildChatSystemPrompt()`
+
+Creates a system prompt for GPT-4 to help users describe their design vision.
+
+```typescript
+import { buildChatSystemPrompt } from '@/lib/ai/prompts';
+
+const systemPrompt = buildChatSystemPrompt({
+  eventType: 'sports',
+  products: ['tshirt', 'hoodie'],
+  brandAssets: {
+    colors: ['#FF0000', '#000000'],
+    fonts: ['Roboto Bold'],
+    voice: 'Bold and energetic',
+    logos: []
+  }
+});
+
+// Use with OpenAI Chat API
+const response = await openai.chat.completions.create({
+  model: 'gpt-4',
+  messages: [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userMessage }
+  ]
+});
+```
+
+**What it includes:**
+- Role definition (design assistant)
+- Event context (e.g., "sports team")
+- Product context (e.g., "t-shirts and hoodies")
+- Brand guidelines (colors, voice, fonts)
+- Guidance on asking clarifying questions
+- Instructions to gather design details
+
+**Purpose**: The assistant helps users refine their ideas into clear design briefs that DALL-E 3 can execute.
+
+---
+
+#### 2. `buildImageGenerationPrompt()`
+
+Creates an optimized prompt for DALL-E 3 to generate merchandise designs.
+
+```typescript
+import { buildImageGenerationPrompt } from '@/lib/ai/prompts';
+
+const imagePrompt = buildImageGenerationPrompt(
+  'A bold lion mascot with flames in the background',
+  {
+    eventType: 'sports',
+    products: ['tshirt'],
+    brandAssets: {
+      colors: ['#FF0000', '#FFD700'],
+      fonts: [],
+      voice: 'Bold and energetic',
+      logos: []
+    }
+  }
+);
+
+// Use with DALL-E 3
+const response = await openai.images.generate({
+  model: 'dall-e-3',
+  prompt: imagePrompt,
+  size: '1024x1024',
+  quality: 'hd',
+  n: 1
+});
+```
+
+**What it includes:**
+- User's design description
+- Event type context
+- Product placement guidance
+- Brand colors to incorporate
+- Print-friendly design specifications
+- Technical requirements (vector-style, high contrast, limited colors)
+
+**Output**: A comprehensive prompt that produces designs optimized for merchandise printing.
+
+---
+
+#### 3. `buildRefinementPrompt()`
+
+Creates a prompt for refining existing designs based on user feedback.
+
+```typescript
+import { buildRefinementPrompt } from '@/lib/ai/prompts';
+
+const refinedPrompt = buildRefinementPrompt(
+  'A bold lion mascot',
+  'Make the lion more fierce and add lightning instead of flames',
+  context
+);
+
+// Use with DALL-E 3 for iterations
+const response = await openai.images.generate({
+  model: 'dall-e-3',
+  prompt: refinedPrompt,
+  size: '1024x1024'
+});
+```
+
+**Use Case**: When users want to iterate on a design with specific changes.
+
+---
+
+#### 4. `getStarterPrompts()`
+
+Returns contextual starter prompts based on event type.
+
+```typescript
+import { getStarterPrompts } from '@/lib/ai/prompts';
+
+const starters = getStarterPrompts('charity');
+// Returns:
+// [
+//   'Create a heart-centered design for our charity event',
+//   'Design a compassionate logo that inspires giving',
+//   'Make an uplifting design that represents hope and community'
+// ]
+```
+
+**Use Case**: Help users get started if they're not sure what to create.
+
+---
+
+### Design Context Interface
+
+All prompt functions accept a `DesignContext` object:
+
+```typescript
+interface DesignContext {
+  eventType: EventType | null;  // 'charity' | 'fundraiser' | 'company' | 'sports' | 'school' | 'personal'
+  products: string[];            // ['tshirt', 'mug', 'hat', etc.]
+  brandAssets?: {
+    colors: string[];            // ['#FF5733', '#3498DB']
+    fonts: string[];             // ['Roboto', 'Open Sans']
+    voice: string;               // 'Fun and playful'
+    logos: string[];             // ['https://...']
+  };
+}
+```
+
+---
+
+### When to Use Each Function
+
+#### Use `buildChatSystemPrompt()` when:
+- ✅ Creating a conversational design assistant
+- ✅ Helping users describe their vision
+- ✅ Asking clarifying questions
+- ✅ Refining ideas before generation
+- ✅ Providing design suggestions
+
+**Example Flow**:
+```
+User: "I need something for our team"
+Assistant (GPT-4): "I'd love to help! Since this is for a sports team,
+                    should the design include your team mascot or logo?
+                    What colors should I focus on?"
+```
+
+#### Use `buildImageGenerationPrompt()` when:
+- ✅ User is ready to generate a design
+- ✅ Converting user's vision to image
+- ✅ Creating initial design concepts
+- ✅ Generating multiple variations
+
+**Example**:
+```
+User description: "Bold lion with flames"
+→ DALL-E 3 prompt: "Bold lion with flames. Design style: Clean, vector-style
+                    illustration suitable for merchandise printing. Context:
+                    This design is for a sports team. Color palette: #FF0000,
+                    #FFD700. High contrast, bold lines..."
+```
+
+#### Use `buildRefinementPrompt()` when:
+- ✅ User wants to modify existing design
+- ✅ Iterating based on feedback
+- ✅ Fine-tuning specific elements
+
+**Example**:
+```
+Original: "Bold lion mascot"
+Feedback: "Make it more fierce, add lightning"
+→ Refined prompt: "Based on this design: 'Bold lion mascot'
+                   Make these changes: Make it more fierce, add lightning..."
+```
+
+#### Use `getStarterPrompts()` when:
+- ✅ User lands on AI chat step
+- ✅ Showing contextual suggestions
+- ✅ Helping overcome blank canvas syndrome
+
+---
+
+### Usage in AI Chat Step
+
+The AI Chat Step component uses these prompts like this:
+
+```typescript
+import {
+  buildChatSystemPrompt,
+  buildImageGenerationPrompt,
+  getStarterPrompts
+} from '@/lib/ai/prompts';
+import { useDesignWizard } from '@/lib/store/design-wizard';
+
+function AiChatStep() {
+  const { eventType, selectedProducts, brandAssets } = useDesignWizard();
+
+  // Build context once
+  const context = {
+    eventType,
+    products: selectedProducts,
+    brandAssets
+  };
+
+  // Get system prompt for chat
+  const systemPrompt = buildChatSystemPrompt(context);
+
+  // Show starter prompts
+  const starters = getStarterPrompts(eventType);
+
+  // When user describes design
+  async function handleChatMessage(userMessage: string) {
+    const response = await fetch('/api/ai/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        systemPrompt,
+        userMessage
+      })
+    });
+  }
+
+  // When user is ready to generate
+  async function handleGenerateDesign(userPrompt: string) {
+    const imagePrompt = buildImageGenerationPrompt(userPrompt, context);
+
+    const response = await fetch('/api/ai/generate', {
+      method: 'POST',
+      body: JSON.stringify({ prompt: imagePrompt })
+    });
+  }
+}
+```
+
+---
+
+### Prompt Engineering Best Practices
+
+**For Chat Prompts:**
+1. Provide clear role definition
+2. Include all relevant context
+3. Give specific guidelines
+4. Encourage clarifying questions
+5. Focus on gathering details
+
+**For Image Generation:**
+1. Start with user's description
+2. Add merchandise-specific requirements
+3. Specify print-friendly characteristics
+4. Include brand colors explicitly
+5. Request appropriate style (vector, high contrast)
+6. Avoid photorealistic or complex gradients
+
+**Technical Specifications for Print:**
+- "Vector-style illustration"
+- "High contrast, bold lines"
+- "Limited color palette"
+- "Simple shapes for screen printing"
+- "No photorealistic details"
+- "No gradients or overly complex patterns"
+
+---
+
+### Modifying Prompts
+
+To customize prompts for your use case:
+
+**1. Update event type descriptions:**
+```typescript
+// In prompts.ts
+const EVENT_TYPE_DESCRIPTIONS: Record<EventType, string> = {
+  charity: 'charity event, fundraiser, or non-profit organization',
+  sports: 'sports team, tournament, league, or athletic event',
+  // Add or modify event types
+};
+```
+
+**2. Adjust product descriptions:**
+```typescript
+const PRODUCT_DESCRIPTIONS: Record<string, string> = {
+  tshirt: 'centered on the front of a t-shirt',
+  mug: 'wrapping around a coffee mug',
+  // Add or modify product types
+};
+```
+
+**3. Change technical requirements:**
+```typescript
+// In buildImageGenerationPrompt()
+sections.push(
+  'Technical requirements: ' +
+  'Simple shapes that work well for screen printing. ' +
+  'Custom requirement here...'
+);
+```
+
+**4. Update guidelines:**
+```typescript
+// In buildChatSystemPrompt()
+sections.push(
+  '\n\nGUIDELINES:\n' +
+  '- Your custom guideline\n' +
+  '- Another guideline\n'
+);
+```
+
+---
+
+### Testing Prompts
+
+**Test different event types:**
+```typescript
+const contexts = [
+  { eventType: 'charity', products: ['tshirt'] },
+  { eventType: 'sports', products: ['hoodie'] },
+  { eventType: 'company', products: ['mug'] }
+];
+
+contexts.forEach(ctx => {
+  const prompt = buildChatSystemPrompt(ctx);
+  console.log('Prompt for', ctx.eventType, ':', prompt);
+});
+```
+
+**Test with/without brand assets:**
+```typescript
+// Without brand assets
+const prompt1 = buildImageGenerationPrompt('Bold lion', {
+  eventType: 'sports',
+  products: ['tshirt']
+});
+
+// With brand assets
+const prompt2 = buildImageGenerationPrompt('Bold lion', {
+  eventType: 'sports',
+  products: ['tshirt'],
+  brandAssets: {
+    colors: ['#FF0000', '#FFD700'],
+    voice: 'Bold and energetic',
+    fonts: [],
+    logos: []
+  }
+});
+
+// Compare outputs
+console.log('Without assets:', prompt1);
+console.log('With assets:', prompt2);
+```
+
+---
+
+### Common Patterns
+
+**Chat → Generate Flow:**
+```typescript
+// 1. User starts chat
+const systemPrompt = buildChatSystemPrompt(context);
+const chatResponse = await gpt4Chat(systemPrompt, userMessage);
+
+// 2. User is ready to generate
+const imagePrompt = buildImageGenerationPrompt(refinedIdea, context);
+const imageResponse = await dalleGenerate(imagePrompt);
+
+// 3. User wants to refine
+const refinedPrompt = buildRefinementPrompt(imagePrompt, feedback, context);
+const refinedImage = await dalleGenerate(refinedPrompt);
+```
+
+**Starter Prompts UI:**
+```tsx
+const starters = getStarterPrompts(eventType);
+
+return (
+  <div>
+    <p>Try these prompts:</p>
+    {starters.map((prompt, i) => (
+      <button key={i} onClick={() => setUserPrompt(prompt)}>
+        {prompt}
+      </button>
+    ))}
+  </div>
+);
+```
+
+---
+
 ## Development Workflows
 
 ### Starting Development
@@ -2098,6 +2519,557 @@ All upload attempts are logged with:
 [Upload] Success - user: abc123-def456-ghi789, file: logo.png, path: abc123-def456-ghi789/logos/1702123456789-xyz789-logo.png, duration: 847ms
 ```
 
+### Chat API
+
+**Endpoint**: `POST /api/chat`
+
+Stream AI chat responses for design guidance using GPT-4.
+
+#### Request
+
+**Method**: POST
+**Content-Type**: `application/json`
+**Authentication**: Required (Supabase session cookie)
+
+**Body Parameters**:
+```typescript
+{
+  messages: Array<{
+    role: 'user' | 'assistant' | 'system';
+    content: string;
+  }>;
+  eventType?: 'charity' | 'fundraiser' | 'company' | 'sports' | 'school' | 'personal' | null;
+  products?: string[];
+  brandAssets?: {
+    colors?: string[];
+    fonts?: string[];
+    voice?: string;
+    logos?: string[];
+  };
+}
+```
+
+#### Response
+
+**Success (200)**: Returns a text stream response
+- Content-Type: `text/plain; charset=utf-8`
+- Headers:
+  - `X-RateLimit-Remaining`: Number of remaining requests in current window
+
+**Streaming Format**: Server-Sent Events (SSE) text stream
+```
+Hello! I can help
+ you create an amazing
+ design for your...
+```
+
+**Error (401 - Unauthorized)**:
+```json
+{
+  "error": "Unauthorized"
+}
+```
+
+**Error (429 - Rate Limit Exceeded)**:
+```json
+{
+  "error": "Rate limit exceeded",
+  "message": "Too many requests. Please try again later."
+}
+```
+
+**Error (400 - Validation Error)**:
+```json
+{
+  "error": "Invalid request",
+  "details": [
+    {
+      "code": "invalid_type",
+      "path": ["messages"],
+      "message": "Required"
+    }
+  ]
+}
+```
+
+#### Features
+
+1. **Authentication**: Requires valid Supabase session
+2. **Rate Limiting**: 100 requests per hour per user (in-memory)
+3. **Streaming**: Real-time response streaming for better UX
+4. **Context-Aware**: Uses event type, products, and brand assets to build contextual system prompts
+5. **Validation**: Zod schema validation for all inputs
+6. **Error Handling**: Comprehensive error handling with detailed messages
+
+#### Example Usage
+
+**JavaScript/TypeScript with Vercel AI SDK**:
+```typescript
+import { useChat } from 'ai/react';
+
+function ChatInterface() {
+  const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
+    api: '/api/chat',
+    body: {
+      eventType: 'sports',
+      products: ['tshirt', 'hoodie'],
+      brandAssets: {
+        colors: ['#FF0000', '#000000'],
+        voice: 'Bold and energetic'
+      }
+    }
+  });
+
+  return (
+    <div>
+      {messages.map((msg) => (
+        <div key={msg.id}>
+          <strong>{msg.role}:</strong> {msg.content}
+        </div>
+      ))}
+
+      <form onSubmit={handleSubmit}>
+        <input value={input} onChange={handleInputChange} />
+        <button type="submit" disabled={isLoading}>Send</button>
+      </form>
+    </div>
+  );
+}
+```
+
+**Fetch API**:
+```typescript
+async function streamChat(messages, context) {
+  const response = await fetch('/api/chat', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      messages,
+      eventType: context.eventType,
+      products: context.products,
+      brandAssets: context.brandAssets,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Chat request failed');
+  }
+
+  // Handle streaming response
+  const reader = response.body?.getReader();
+  const decoder = new TextDecoder();
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    const text = decoder.decode(value);
+    console.log('Received:', text);
+  }
+}
+```
+
+**cURL** (for testing):
+```bash
+curl -X POST http://localhost:3000/api/chat \
+  -H "Content-Type: application/json" \
+  -H "Cookie: sb-auth-token=YOUR_TOKEN" \
+  -d '{
+    "messages": [
+      {
+        "role": "user",
+        "content": "Help me design a logo for my sports team"
+      }
+    ],
+    "eventType": "sports",
+    "products": ["tshirt"],
+    "brandAssets": {
+      "colors": ["#FF0000", "#000000"]
+    }
+  }' \
+  --no-buffer
+```
+
+#### Rate Limiting
+
+**Current Implementation**: In-memory rate limiter
+- **Limit**: 100 requests per hour per user
+- **Window**: Rolling 1-hour window
+- **Storage**: In-memory Map (resets on server restart)
+- **Headers**: `X-RateLimit-Remaining` included in response
+
+**Production Recommendation**:
+Use Redis-based rate limiting for distributed environments:
+
+```typescript
+import { Ratelimit } from "@upstash/ratelimit";
+import { Redis } from "@upstash/redis";
+
+const ratelimit = new Ratelimit({
+  redis: Redis.fromEnv(),
+  limiter: Ratelimit.slidingWindow(100, "1 h"),
+});
+
+const { success, remaining } = await ratelimit.limit(userId);
+```
+
+#### Logging
+
+All chat requests are logged with:
+- **User ID**: Authenticated user identifier
+- **Message Count**: Number of messages in conversation
+- **Event Type**: Selected event category
+- **Products Count**: Number of selected products
+- **Has Brand Assets**: Boolean flag
+
+**Example Log Output**:
+```
+[Chat API] Request: {
+  userId: 'abc123-def456',
+  messageCount: 3,
+  eventType: 'sports',
+  productsCount: 2,
+  hasBrandAssets: true
+}
+```
+
+### Design Generation API
+
+**Endpoint**: `POST /api/generate-design`
+
+Generate custom merchandise designs using GPT-4 + DALL-E 3.
+
+#### Two-Step Process
+
+1. **GPT-4 Prompt Refinement**: Optimizes user's prompt for DALL-E 3
+2. **DALL-E 3 Image Generation**: Creates the actual design image
+
+#### Request
+
+**Method**: POST
+**Content-Type**: `application/json`
+**Authentication**: Required (Supabase session cookie)
+
+**Body Parameters**:
+```typescript
+{
+  prompt: string; // User's design description (1-1000 chars)
+  eventType?: 'charity' | 'fundraiser' | 'company' | 'sports' | 'school' | 'personal' | null;
+  products?: string[];
+  brandAssets?: {
+    colors?: string[];
+    fonts?: string[];
+    voice?: string;
+    logos?: string[];
+  };
+}
+```
+
+#### Response
+
+**Success (200)**:
+```json
+{
+  "success": true,
+  "data": {
+    "imageUrl": "https://oaidalleapiprodscus.blob.core.windows.net/...",
+    "revisedPrompt": "DALL-E's interpretation of the prompt",
+    "originalPrompt": "User's original prompt",
+    "refinedPrompt": "GPT-4 refined prompt"
+  }
+}
+```
+
+**Headers**:
+- `X-RateLimit-Remaining`: Number of remaining generations in current window
+
+**Error (401 - Unauthorized)**:
+```json
+{
+  "error": "Unauthorized"
+}
+```
+
+**Error (429 - Rate Limit Exceeded)**:
+```json
+{
+  "error": "Rate limit exceeded",
+  "message": "Maximum 10 design generations per hour. Please try again later."
+}
+```
+
+**Error (400 - Content Policy Violation)**:
+```json
+{
+  "error": "Content policy violation",
+  "message": "Your prompt was flagged by our content policy. Please try a different description."
+}
+```
+
+**Error (400 - Validation Error)**:
+```json
+{
+  "error": "Invalid request",
+  "details": [
+    {
+      "code": "too_small",
+      "path": ["prompt"],
+      "message": "Prompt is required"
+    }
+  ]
+}
+```
+
+#### Features
+
+1. **Two-Step AI Process**: GPT-4 optimizes prompts, then DALL-E 3 generates images
+2. **Authentication**: Requires valid Supabase session
+3. **Rate Limiting**: 10 generations per hour per user (in-memory)
+4. **Context-Aware**: Uses event type, products, and brand assets for better designs
+5. **Validation**: Zod schema validation for all inputs
+6. **Error Handling**: Handles content policy violations, rate limits, quota issues
+7. **Logging**: Tracks prompts, generation time, and success/failure
+
+#### Example Usage
+
+**JavaScript/TypeScript**:
+```typescript
+async function generateDesign(prompt: string, context?: DesignContext) {
+  const response = await fetch('/api/generate-design', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      prompt,
+      eventType: context?.eventType,
+      products: context?.products,
+      brandAssets: context?.brandAssets,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Design generation failed');
+  }
+
+  const result = await response.json();
+  return result.data;
+}
+
+// Usage
+const design = await generateDesign(
+  'A bold lion mascot with our team colors',
+  {
+    eventType: 'sports',
+    products: ['tshirt'],
+    brandAssets: {
+      colors: ['#FF0000', '#000000'],
+      voice: 'Bold and energetic',
+    },
+  }
+);
+
+console.log('Generated design:', design.imageUrl);
+```
+
+**React Component**:
+```typescript
+import { useState } from 'react';
+
+function DesignGenerator() {
+  const [prompt, setPrompt] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleGenerate = async () => {
+    setLoading(true);
+    setError('');
+
+    try {
+      const response = await fetch('/api/generate-design', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt,
+          eventType: 'sports',
+          products: ['tshirt'],
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message);
+      }
+
+      const result = await response.json();
+      setImageUrl(result.data.imageUrl);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Generation failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div>
+      <textarea
+        value={prompt}
+        onChange={(e) => setPrompt(e.target.value)}
+        placeholder="Describe your design..."
+      />
+      <button onClick={handleGenerate} disabled={loading}>
+        {loading ? 'Generating...' : 'Generate Design'}
+      </button>
+      {error && <p className="error">{error}</p>}
+      {imageUrl && <img src={imageUrl} alt="Generated design" />}
+    </div>
+  );
+}
+```
+
+**cURL** (for testing):
+```bash
+curl -X POST http://localhost:3000/api/generate-design \
+  -H "Content-Type: application/json" \
+  -H "Cookie: sb-auth-token=YOUR_TOKEN" \
+  -d '{
+    "prompt": "A bold lion mascot for our sports team",
+    "eventType": "sports",
+    "products": ["tshirt"],
+    "brandAssets": {
+      "colors": ["#FF0000", "#000000"],
+      "voice": "Bold and energetic"
+    }
+  }'
+```
+
+#### Rate Limiting
+
+**Current Implementation**: In-memory rate limiter
+- **Limit**: 10 generations per hour per user
+- **Window**: Rolling 1-hour window
+- **Storage**: In-memory Map (resets on server restart)
+- **Headers**: `X-RateLimit-Remaining` included in response
+
+**Production Recommendation**:
+Use Redis-based rate limiting for distributed environments:
+
+```typescript
+import { Ratelimit } from "@upstash/ratelimit";
+import { Redis } from "@upstash/redis";
+
+const ratelimit = new Ratelimit({
+  redis: Redis.fromEnv(),
+  limiter: Ratelimit.slidingWindow(10, "1 h"),
+});
+
+const { success, remaining } = await ratelimit.limit(userId);
+```
+
+#### Cost Tracking
+
+**DALL-E 3 Pricing** (as of 2025):
+- Standard quality (1024x1024): $0.040 per image
+- HD quality (1024x1024): $0.080 per image
+
+**GPT-4 Pricing** (approximate):
+- GPT-4 Omni Mini: ~$0.0001 per prompt refinement
+
+**Estimated Cost per Generation**: ~$0.04 (standard quality)
+
+To track costs:
+```typescript
+// Add to logging
+console.log('[Generate Design] Cost estimate:', {
+  dalle3: '$0.040',
+  gpt4: '$0.0001',
+  total: '$0.0401',
+});
+```
+
+#### Image Persistence
+
+**Important**: DALL-E image URLs expire after a few hours. For production:
+
+```typescript
+// After DALL-E generation, upload to Supabase Storage
+import { createServiceClient } from '@/lib/supabase/server';
+
+const supabase = createServiceClient();
+
+// Download image from DALL-E URL
+const imageResponse = await fetch(imageUrl);
+const imageBuffer = await imageResponse.arrayBuffer();
+
+// Upload to Supabase Storage
+const fileName = `${userId}/${Date.now()}.png`;
+const { data, error } = await supabase.storage
+  .from('generated-designs')
+  .upload(fileName, imageBuffer, {
+    contentType: 'image/png',
+  });
+
+if (data) {
+  const { data: publicUrlData } = supabase.storage
+    .from('generated-designs')
+    .getPublicUrl(fileName);
+
+  const permanentUrl = publicUrlData.publicUrl;
+}
+```
+
+#### Logging
+
+All generation requests are logged with:
+- **User ID**: Authenticated user identifier
+- **Prompt**: User's original prompt (truncated to 100 chars)
+- **Event Type**: Selected event category
+- **Products Count**: Number of selected products
+- **Has Brand Assets**: Boolean flag
+- **Duration**: Total generation time in milliseconds
+- **Remaining**: Generations remaining in rate limit window
+
+**Example Log Output**:
+```
+[Generate Design] Request: {
+  userId: '64ad7ae3-e873-43fd',
+  prompt: 'A bold lion mascot with our team colors...',
+  eventType: 'sports',
+  productsCount: 1,
+  hasBrandAssets: true
+}
+[Generate Design] Step 1: Refining prompt with GPT-4...
+[Generate Design] Refined prompt: A bold, stylized lion mascot in red and black...
+[Generate Design] Step 2: Generating image with DALL-E 3...
+[Generate Design] Success: {
+  userId: '64ad7ae3-e873-43fd',
+  imageUrl: 'https://oaidalleapiprodscus...',
+  duration: '8742ms',
+  remaining: 9
+}
+```
+
+#### Error Handling
+
+**Content Policy Violations**:
+- Prompts are screened by OpenAI's content policy
+- Violations return 400 status with clear message
+- User should revise their prompt
+
+**Rate Limits**:
+- App-level: 10 generations per hour per user
+- OpenAI-level: Handled with 429 response
+- Both provide clear error messages
+
+**Quota Issues**:
+- OpenAI API key quota exceeded returns 503
+- Requires adding credits or upgrading plan
+
 ---
 
 ## Environment Variables
@@ -2147,6 +3119,168 @@ This will:
 
 ---
 
+## AI-First Design Wizard Flow
+
+GenAI-Merch features a comprehensive 5-step wizard that guides users from concept to final design. The wizard leverages AI at every step while maintaining full user control.
+
+### Wizard Steps Overview
+
+**Step 1: Event Type Selection**
+- User selects the purpose of their merchandise (charity, sports, company, etc.)
+- This context informs AI design generation in later steps
+- Influences design recommendations and starter prompts
+
+**Step 2: Product Selection**
+- User selects which products they want to order (t-shirts, hoodies, mugs, etc.)
+- Multiple products can be selected
+- The first selected product determines the default mockup in the canvas editor
+
+**Step 3: Brand Assets Upload (Optional)**
+- Users can upload logos, brand colors, fonts, and define brand voice
+- All fields are optional - users can skip this step entirely
+- Uploaded assets are used to inform AI design generation
+- Assets are stored in Supabase Storage under `{userId}/logos/`
+
+**Step 4: AI Design Chat**
+- Split-screen interface: Chat on left, generated designs gallery on right
+- Users chat with GPT-4 to refine their design ideas
+- Users can generate designs with DALL-E 3 based on their description
+- All generated designs are saved to the Zustand store
+- Users select their favorite design to continue to the canvas
+
+**Step 5: Canvas Editor**
+- Interactive Fabric.js canvas for final design customization
+- **Auto-loads AI-generated design** from step 4 if available
+- **Auto-selects mockup** based on first product from step 2
+- Falls back to manual logo upload if no AI design was generated
+- Users can drag, scale, rotate, and position designs
+- Export options: Save to database and Download as PNG
+
+---
+
+### Canvas Step Integration
+
+The canvas step (`src/components/design/steps/canvas-step.tsx`) seamlessly integrates AI-generated designs with the interactive canvas editor.
+
+#### Key Features
+
+**1. Auto-Mockup Selection**
+```typescript
+// Maps product IDs to product types for mockup selection
+const PRODUCT_TYPE_MAP = {
+  tshirt: 'tshirt',
+  sweatshirt: 'sweatshirt',
+  hoodie: 'hoodie',
+  polo: 'polo',
+};
+
+// Auto-selects mockup based on first product
+const firstProductId = selectedProducts[0];
+const productType = PRODUCT_TYPE_MAP[firstProductId];
+const mockup = getMockupsByProduct(productType)[0];
+```
+
+**2. AI Design Loading Priority**
+```typescript
+// Priority 1: AI-generated design from step 4
+if (finalDesignUrl) {
+  await loadImageOntoCanvas(canvas, finalDesignUrl, mockup.printArea);
+}
+// Priority 2: Brand logo from step 3
+else if (brandAssets.logos.length > 0) {
+  await loadImageOntoCanvas(canvas, brandAssets.logos[0], mockup.printArea);
+}
+// Priority 3: Manual upload interface shown
+```
+
+**3. Canvas Controls**
+- **Rotate**: 15° increments
+- **Zoom In/Out**: 10% scale adjustments
+- **Delete**: Remove selected object
+- **Drag**: Move within print area bounds
+- **Manual Scale/Rotate**: Via Fabric.js handles
+
+**4. Design Metadata Saved**
+When a design is saved, the following metadata is captured:
+```typescript
+{
+  canvasJSON: string,        // Fabric.js canvas state (editable)
+  imageUrl: string,          // Exported PNG (final design)
+  metadata: {
+    eventType: string,       // From step 1
+    products: string[],      // From step 2
+    hasAIDesign: boolean,    // Whether design was AI-generated
+    brandColors: string[],   // From step 3
+    aiPrompt?: string,       // Original prompt if AI-generated
+  }
+}
+```
+
+#### Workflow Examples
+
+**AI Design Workflow:**
+1. User generates design in step 4: "Bold lion mascot with team colors"
+2. User selects design and clicks "Continue to Canvas"
+3. Canvas step auto-loads:
+   - Mockup: t-shirt (from step 2 product selection)
+   - Design: AI-generated lion image (from step 4)
+   - Badge: "AI Generated Design" displayed
+4. User adjusts positioning, rotation, scale as needed
+5. User clicks "Save Design" - metadata includes original AI prompt
+
+**Manual Upload Workflow:**
+1. User skips AI design generation in step 4
+2. Canvas step auto-loads:
+   - Mockup: hoodie (from step 2 product selection)
+   - Design: Brand logo (from step 3 brand assets)
+3. OR user uploads new logo via drag-and-drop interface
+4. User positions and saves
+
+**Hybrid Workflow:**
+1. User generates AI design but also has brand assets
+2. Canvas loads AI design automatically
+3. User can delete AI design and upload manual logo if needed
+4. Full flexibility to switch between approaches
+
+#### Technical Implementation
+
+**Canvas Initialization:**
+```typescript
+const canvas = initializeCanvas(canvasRef.current, 600, 700, {
+  backgroundColor: '#f8f9fa',
+  selectionColor: 'rgba(100, 150, 255, 0.3)',
+});
+
+setupPrintAreaBounds(canvas, mockup.printArea, {
+  stroke: '#4a90e2',
+  strokeWidth: 2,
+  fill: 'rgba(74, 144, 226, 0.05)',
+});
+```
+
+**Boundary Constraints:**
+```typescript
+canvas.on('object:moving', (e) => {
+  if (e.target) {
+    constrainObjectToBounds(e.target, mockup.printArea);
+  }
+});
+```
+
+**Export Options:**
+- **Save**: 2x resolution PNG + Canvas JSON for editing
+- **Download**: 3x resolution PNG for high-quality preview
+
+#### File Upload Integration
+
+Manual logo upload uses the same Supabase Storage infrastructure as brand assets:
+- **Location**: `{userId}/logos/{timestamp}-{random}-{filename}.png`
+- **Validation**: Client-side (file type, size) + Server-side (DPI, dimensions)
+- **Max Size**: 5MB
+- **Formats**: PNG, JPG, SVG
+
+---
+
 ## Notes & Reminders
 
 - **Cost optimization**: Monitor OpenAI and Printful API usage
@@ -2159,4 +3293,4 @@ This will:
 
 ---
 
-**Last Updated**: 2025-12-01 (Added Supabase Storage helpers for file upload, validation, and management)
+**Last Updated**: 2025-12-27 (Implemented Canvas Step with AI design integration and auto-mockup selection)

@@ -5,7 +5,7 @@
  * Uses the service role client for server-side operations
  */
 
-import { createServiceClient } from './client';
+import { createServiceClient } from './server';
 
 // Constants
 const DESIGNS_BUCKET = 'designs';

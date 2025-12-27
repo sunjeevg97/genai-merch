@@ -16,14 +16,7 @@
 
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useDesignWizard } from '@/lib/store/design-wizard';
-import {
-  initializeCanvas,
-  loadImageOntoCanvas,
-  setupPrintAreaBounds,
-  constrainObjectToBounds,
-  exportCanvasAsImage,
-  getCanvasAsJSON,
-} from '@/lib/design/canvas-utils';
+import type { PrintArea } from '@/lib/design/canvas-utils';
 import {
   getMockupsByProduct,
   getDefaultMockup,
@@ -51,7 +44,6 @@ import { useDropzone } from 'react-dropzone';
 import { uploadDesignFile } from '@/lib/supabase/storage';
 import { createBrowserClient } from '@/lib/supabase/client';
 import Image from 'next/image';
-import { fabric } from 'fabric';
 
 /**
  * Product ID to Product Type mapping
@@ -147,38 +139,45 @@ export function CanvasStep() {
   useEffect(() => {
     if (!canvasRef.current || !mockup || isInitialized) return;
 
-    try {
-      const canvas = initializeCanvas(canvasRef.current, 600, 700, {
-        backgroundColor: '#f8f9fa',
-        selectionColor: 'rgba(100, 150, 255, 0.3)',
-        selectionBorderColor: '#4a90e2',
-      });
+    const initCanvas = async () => {
+      try {
+        // Dynamic import to avoid SSR issues
+        const { initializeCanvas, setupPrintAreaBounds } = await import('@/lib/design/canvas-utils');
 
-      canvasInstanceRef.current = canvas;
+        const canvas = initializeCanvas(canvasRef.current!, 600, 700, {
+          backgroundColor: '#f8f9fa',
+          selectionColor: 'rgba(100, 150, 255, 0.3)',
+          selectionBorderColor: '#4a90e2',
+        });
 
-      // Setup print area bounds
-      setupPrintAreaBounds(canvas, mockup.printArea, {
-        stroke: '#4a90e2',
-        strokeWidth: 2,
-        fill: 'rgba(74, 144, 226, 0.05)',
-        strokeDashArray: [5, 5],
-      });
+        canvasInstanceRef.current = canvas;
 
-      setIsInitialized(true);
+        // Setup print area bounds
+        setupPrintAreaBounds(canvas, mockup.printArea, {
+          stroke: '#4a90e2',
+          strokeWidth: 2,
+          fill: 'rgba(74, 144, 226, 0.05)',
+          strokeDashArray: [5, 5],
+        });
 
-      console.log('[Canvas Step] Canvas initialized');
+        setIsInitialized(true);
 
-      // Cleanup on unmount
-      return () => {
-        if (canvasInstanceRef.current) {
-          canvasInstanceRef.current.dispose();
-          canvasInstanceRef.current = null;
-        }
-      };
-    } catch (error) {
-      console.error('[Canvas Step] Failed to initialize canvas:', error);
-      toast.error('Failed to initialize canvas');
-    }
+        console.log('[Canvas Step] Canvas initialized');
+      } catch (error) {
+        console.error('[Canvas Step] Failed to initialize canvas:', error);
+        toast.error('Failed to initialize canvas');
+      }
+    };
+
+    initCanvas();
+
+    // Cleanup on unmount
+    return () => {
+      if (canvasInstanceRef.current) {
+        canvasInstanceRef.current.dispose();
+        canvasInstanceRef.current = null;
+      }
+    };
   }, [mockup, isInitialized]);
 
   /**
@@ -192,6 +191,9 @@ export function CanvasStep() {
       if (!canvas) return;
 
       try {
+        // Dynamic import to avoid SSR issues
+        const { loadImageOntoCanvas } = await import('@/lib/design/canvas-utils');
+
         let imageUrl: string | null = null;
 
         // Priority 1: Use final design URL (from step 4)
@@ -223,21 +225,32 @@ export function CanvasStep() {
    * Add boundary constraints on object movement
    */
   useEffect(() => {
-    if (!canvasInstanceRef.current || !mockup) return;
+    if (!isInitialized || !canvasInstanceRef.current || !mockup) return;
 
-    const canvas = canvasInstanceRef.current;
+    const setupBoundaryConstraints = async () => {
+      try {
+        // Dynamic import to avoid SSR issues
+        const { constrainObjectToBounds } = await import('@/lib/design/canvas-utils');
+        const canvas = canvasInstanceRef.current;
+        if (!canvas) return;
 
-    const handleMoving = (e: fabric.IEvent) => {
-      if (e.target) {
-        constrainObjectToBounds(e.target, mockup.printArea);
+        const handleMoving = (e: any) => {
+          if (e.target) {
+            constrainObjectToBounds(e.target, mockup.printArea);
+          }
+        };
+
+        canvas.on('object:moving', handleMoving);
+
+        return () => {
+          canvas.off('object:moving', handleMoving);
+        };
+      } catch (error) {
+        console.error('[Canvas Step] Failed to setup boundary constraints:', error);
       }
     };
 
-    canvas.on('object:moving', handleMoving);
-
-    return () => {
-      canvas.off('object:moving', handleMoving);
-    };
+    setupBoundaryConstraints();
   }, [isInitialized, mockup]);
 
   /**
@@ -278,8 +291,11 @@ export function CanvasStep() {
         const result = await uploadDesignFile(file, userId);
 
         if (result.success && result.url) {
+          // Dynamic import to avoid SSR issues
+          const { loadImageOntoCanvas } = await import('@/lib/design/canvas-utils');
+
           // Load uploaded image onto canvas
-          await loadImageOntoCanvas(canvasInstanceRef.current, result.url, mockup.printArea);
+          await loadImageOntoCanvas(canvasInstanceRef.current!, result.url, mockup.printArea);
           setHasLoadedDesign(true);
           toast.success('Logo uploaded and added to canvas');
         } else {
@@ -319,6 +335,9 @@ export function CanvasStep() {
     setIsSaving(true);
 
     try {
+      // Dynamic import to avoid SSR issues
+      const { getCanvasAsJSON, exportCanvasAsImage } = await import('@/lib/design/canvas-utils');
+
       // Export canvas as JSON for saving
       const canvasJSON = getCanvasAsJSON(canvasInstanceRef.current);
 
@@ -355,7 +374,7 @@ export function CanvasStep() {
   /**
    * Handle Download Design
    */
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!canvasInstanceRef.current) {
       toast.error('Canvas not ready');
       return;
@@ -364,6 +383,9 @@ export function CanvasStep() {
     setIsDownloading(true);
 
     try {
+      // Dynamic import to avoid SSR issues
+      const { exportCanvasAsImage } = await import('@/lib/design/canvas-utils');
+
       // Export canvas as high-res image
       const dataURL = exportCanvasAsImage(canvasInstanceRef.current, {
         format: 'png',

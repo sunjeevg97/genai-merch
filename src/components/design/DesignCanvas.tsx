@@ -104,6 +104,7 @@ export function DesignCanvas({
   const [isLoadingLogo, setIsLoadingLogo] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
+  const [hasLogo, setHasLogo] = useState(false); // Track logo presence for UI
   const [designState, setDesignState] = useState<DesignState | null>(
     initialDesign || null
   );
@@ -254,6 +255,7 @@ export function DesignCanvas({
     if (logoObjectRef.current) {
       canvas.remove(logoObjectRef.current);
       logoObjectRef.current = null;
+      setHasLogo(false); // Update state for UI
     }
 
     // Load new logo
@@ -261,6 +263,7 @@ export function DesignCanvas({
       .then((logoImg) => {
         logoObjectRef.current = logoImg;
         setIsLoadingLogo(false);
+        setHasLogo(true); // Update state for UI
 
         // Update design state
         updateDesignStateFromCanvas();
@@ -271,6 +274,7 @@ export function DesignCanvas({
       .catch((error) => {
         console.error('[DesignCanvas] Failed to load logo:', error);
         setIsLoadingLogo(false);
+        setHasLogo(false); // Update state for UI
         toast.error('Failed to load logo onto canvas');
       });
   }, [isCanvasReady, uploadedImageUrl, mockup.printArea, updateDesignStateFromCanvas]);
@@ -395,6 +399,7 @@ export function DesignCanvas({
     if (removed) {
       logoObjectRef.current = null;
       setDesignState(null);
+      setHasLogo(false); // Update state for UI
       toast.success('Logo removed');
 
       if (onDesignChange) {
@@ -603,7 +608,7 @@ export function DesignCanvas({
               size="icon"
               variant="secondary"
               onClick={handleCenterLogo}
-              disabled={!logoObjectRef.current}
+              disabled={!hasLogo}
               title="Center logo (C)"
               className="shadow-md"
             >
@@ -614,7 +619,7 @@ export function DesignCanvas({
               size="icon"
               variant="secondary"
               onClick={handleRotateLogo}
-              disabled={!logoObjectRef.current}
+              disabled={!hasLogo}
               title="Rotate 90° (R)"
               className="shadow-md"
             >
@@ -625,7 +630,7 @@ export function DesignCanvas({
               size="icon"
               variant="secondary"
               onClick={handleFlipLogo}
-              disabled={!logoObjectRef.current}
+              disabled={!hasLogo}
               title="Flip horizontal (F)"
               className="shadow-md"
             >
@@ -636,7 +641,7 @@ export function DesignCanvas({
               size="icon"
               variant="destructive"
               onClick={handleDeleteLogo}
-              disabled={!logoObjectRef.current}
+              disabled={!hasLogo}
               title="Delete logo (Del)"
               className="shadow-md"
             >
@@ -647,7 +652,7 @@ export function DesignCanvas({
       </Card>
 
       {/* Keyboard Shortcuts Help */}
-      {isCanvasReady && logoObjectRef.current && (
+      {isCanvasReady && hasLogo && (
         <div className="mt-4 text-center text-xs text-muted-foreground">
           <p>
             <strong>Keyboard shortcuts:</strong> Arrow keys to move • +/- to

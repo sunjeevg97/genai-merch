@@ -80,6 +80,7 @@ export function CanvasStep() {
   const canvasInstanceRef = useRef<fabric.Canvas | null>(null);
   const [mockup, setMockup] = useState<Mockup | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [isCanvasReady, setIsCanvasReady] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
@@ -90,6 +91,19 @@ export function CanvasStep() {
   const firstBrandLogo = useMemo(() => {
     return brandAssets.logos[0] || null;
   }, [brandAssets.logos[0]]);
+
+  // Debug: Log Zustand store values on mount and when they change
+  useEffect(() => {
+    console.log('[Canvas Step] Zustand store values:', {
+      finalDesignUrl,
+      selectedProducts,
+      selectedDesignId,
+      generatedDesignsCount: generatedDesigns.length,
+      firstBrandLogo,
+      eventType,
+      hasBrandColors: brandAssets.colors.length > 0,
+    });
+  }, [finalDesignUrl, selectedProducts, selectedDesignId, generatedDesigns.length, firstBrandLogo, eventType, brandAssets.colors.length]);
 
   /**
    * Get current user ID
@@ -161,8 +175,9 @@ export function CanvasStep() {
         });
 
         setIsInitialized(true);
+        setIsCanvasReady(true);
 
-        console.log('[Canvas Step] Canvas initialized');
+        console.log('[Canvas Step] Canvas initialized and ready, ref set:', !!canvas);
       } catch (error) {
         console.error('[Canvas Step] Failed to initialize canvas:', error);
         toast.error('Failed to initialize canvas');
@@ -171,24 +186,48 @@ export function CanvasStep() {
 
     initCanvas();
 
-    // Cleanup on unmount
+    // Cleanup on unmount only
     return () => {
       if (canvasInstanceRef.current) {
+        console.log('[Canvas Step] Cleaning up canvas');
         canvasInstanceRef.current.dispose();
         canvasInstanceRef.current = null;
+        setIsCanvasReady(false);
+        setIsInitialized(false);
       }
     };
-  }, [mockup, isInitialized]);
+  }, [mockup]); // Removed isInitialized from dependencies to prevent cleanup loop
 
   /**
    * Load AI-generated design or brand logo when canvas is ready
    */
   useEffect(() => {
-    if (!isInitialized || !canvasInstanceRef.current || !mockup || hasLoadedDesign) return;
+    console.log('[Canvas Step] Load design useEffect triggered', {
+      isInitialized,
+      isCanvasReady,
+      hasCanvas: !!canvasInstanceRef.current,
+      hasMockup: !!mockup,
+      hasLoadedDesign,
+      finalDesignUrl,
+      firstBrandLogo,
+    });
+
+    // Only check state variables, not refs (refs don't trigger re-renders)
+    if (!isCanvasReady || !mockup || hasLoadedDesign) {
+      console.log('[Canvas Step] Skipping design load:', {
+        reason: !isCanvasReady ? 'canvas not ready' : !mockup ? 'no mockup' : 'already loaded',
+      });
+      return;
+    }
 
     const loadDesignImage = async () => {
       const canvas = canvasInstanceRef.current;
-      if (!canvas) return;
+      if (!canvas) {
+        console.log('[Canvas Step] Canvas ref is null inside async function');
+        return;
+      }
+
+      console.log('[Canvas Step] Canvas ref confirmed, proceeding with image load');
 
       try {
         // Dynamic import to avoid SSR issues
@@ -199,18 +238,24 @@ export function CanvasStep() {
         // Priority 1: Use final design URL (from step 4)
         if (finalDesignUrl) {
           imageUrl = finalDesignUrl;
-          console.log('[Canvas Step] Loading AI-generated design');
+          console.log('[Canvas Step] Loading AI-generated design:', imageUrl);
         }
         // Priority 2: Use first brand logo if available
         else if (firstBrandLogo) {
           imageUrl = firstBrandLogo;
-          console.log('[Canvas Step] Loading brand logo');
+          console.log('[Canvas Step] Loading brand logo:', imageUrl);
+        } else {
+          console.log('[Canvas Step] No design URL available (neither finalDesignUrl nor firstBrandLogo)');
         }
 
         if (imageUrl) {
+          console.log('[Canvas Step] Attempting to load image onto canvas...');
           await loadImageOntoCanvas(canvas, imageUrl, mockup.printArea);
           setHasLoadedDesign(true);
+          console.log('[Canvas Step] Successfully loaded design onto canvas');
           toast.success('Design loaded onto canvas');
+        } else {
+          console.log('[Canvas Step] No image URL to load');
         }
       } catch (error) {
         console.error('[Canvas Step] Failed to load design image:', error);
@@ -219,13 +264,13 @@ export function CanvasStep() {
     };
 
     loadDesignImage();
-  }, [isInitialized, mockup, finalDesignUrl, firstBrandLogo, hasLoadedDesign]);
+  }, [isCanvasReady, mockup, finalDesignUrl, firstBrandLogo, hasLoadedDesign]);
 
   /**
    * Add boundary constraints on object movement
    */
   useEffect(() => {
-    if (!isInitialized || !canvasInstanceRef.current || !mockup) return;
+    if (!isCanvasReady || !canvasInstanceRef.current || !mockup) return;
 
     const setupBoundaryConstraints = async () => {
       try {
@@ -251,7 +296,7 @@ export function CanvasStep() {
     };
 
     setupBoundaryConstraints();
-  }, [isInitialized, mockup]);
+  }, [isCanvasReady, mockup]);
 
   /**
    * Handle file upload (manual logo upload)

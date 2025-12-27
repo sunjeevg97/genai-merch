@@ -11,7 +11,8 @@ import { useDesignWizard, WizardStep } from '@/lib/store/design-wizard';
 import { EventTypeStep } from '@/components/design/steps/event-type-step';
 import { ProductStep } from '@/components/design/steps/product-step';
 import { BrandAssetsStep } from '@/components/design/steps/brand-assets-step';
-import { AiChatStep } from '@/components/design/steps/ai-chat-step';
+import { ChatStep } from '@/components/design/steps/chat-step';
+import { CanvasStep } from '@/components/design/steps/canvas-step';
 import { Check, Circle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -55,13 +56,9 @@ export function DesignWizard() {
       case WizardStep.BrandAssets:
         return <BrandAssetsStep />;
       case WizardStep.AiChat:
-        return <AiChatStep />;
+        return <ChatStep />;
       case WizardStep.Canvas:
-        return (
-          <div className="text-center text-muted-foreground py-12">
-            Canvas Step (Coming soon)
-          </div>
-        );
+        return <CanvasStep />;
       default:
         return <EventTypeStep />;
     }

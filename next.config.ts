@@ -15,6 +15,18 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/private/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'files.cdn.printful.com',
+        port: '',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'printful-upload.s3-accelerate.amazonaws.com',
+        port: '',
+        pathname: '/**',
+      },
     ],
   },
 };

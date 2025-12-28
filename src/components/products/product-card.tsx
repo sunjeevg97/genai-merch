@@ -49,15 +49,28 @@ export function ProductCard({ product }: ProductCardProps) {
 
   const formattedPrice = `$${(startingPrice / 100).toFixed(2)}`;
 
+  // Validate image URL
+  const isValidImageUrl = (url: string | null): boolean => {
+    if (!url) return false;
+    try {
+      new URL(url);
+      return url.startsWith('http://') || url.startsWith('https://');
+    } catch {
+      return false;
+    }
+  };
+
+  const hasValidImage = isValidImageUrl(product.imageUrl);
+
   return (
     <Link href={`/products/${product.id}`}>
       <Card className="group h-full overflow-hidden transition-all hover:shadow-lg">
         {/* Product Image */}
         <CardHeader className="p-0">
           <div className="relative aspect-square overflow-hidden bg-gray-100">
-            {product.imageUrl ? (
+            {hasValidImage ? (
               <Image
-                src={product.imageUrl}
+                src={product.imageUrl!}
                 alt={product.name}
                 fill
                 className="object-cover transition-transform group-hover:scale-105"

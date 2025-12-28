@@ -41,7 +41,7 @@
 /**
  * Product types available in the design studio
  */
-export type ProductType = 'tshirt' | 'hoodie' | 'polo' | 'sweatshirt';
+export type ProductType = 'tshirt' | 'hoodie' | 'polo' | 'sweatshirt' | 'mug' | 'pen' | 'sticker' | 'hat' | 'tote';
 
 /**
  * View angles for mockups
@@ -155,6 +155,76 @@ export const MOCKUPS: Mockup[] = [
       y: 120,
       width: 300,
       height: 350,
+    },
+  },
+  {
+    id: 'mug-front',
+    name: 'Mug',
+    productType: 'mug',
+    color: 'white',
+    view: 'front',
+    imageUrl: '/products/mug.png',
+    printArea: {
+      x: 200,
+      y: 180,
+      width: 200,
+      height: 200,
+    },
+  },
+  {
+    id: 'pen-front',
+    name: 'Pen',
+    productType: 'pen',
+    color: 'black',
+    view: 'front',
+    imageUrl: '/products/pen.png',
+    printArea: {
+      x: 180,
+      y: 250,
+      width: 240,
+      height: 80,
+    },
+  },
+  {
+    id: 'sticker-front',
+    name: 'Sticker',
+    productType: 'sticker',
+    color: 'white',
+    view: 'front',
+    imageUrl: '/products/sticker.png',
+    printArea: {
+      x: 180,
+      y: 220,
+      width: 240,
+      height: 240,
+    },
+  },
+  {
+    id: 'hat-front',
+    name: 'Hat',
+    productType: 'hat',
+    color: 'black',
+    view: 'front',
+    imageUrl: '/products/hat.png',
+    printArea: {
+      x: 200,
+      y: 200,
+      width: 200,
+      height: 150,
+    },
+  },
+  {
+    id: 'tote-front',
+    name: 'Tote Bag',
+    productType: 'tote',
+    color: 'natural',
+    view: 'front',
+    imageUrl: '/products/tote-bag.png',
+    printArea: {
+      x: 180,
+      y: 180,
+      width: 240,
+      height: 280,
     },
   },
 ];

@@ -59,6 +59,11 @@ const PRODUCT_TYPE_MAP: Record<string, ProductType> = {
   sweatshirt: 'sweatshirt',
   hoodie: 'hoodie',
   polo: 'polo',
+  mug: 'mug',
+  pen: 'pen',
+  sticker: 'sticker',
+  hat: 'hat',
+  tote: 'tote',
 };
 
 /**
@@ -142,16 +147,27 @@ export function CanvasStep() {
     const firstProductId = selectedProducts[0];
     const productType = PRODUCT_TYPE_MAP[firstProductId];
 
+    console.log('[Canvas Step] Selecting mockup for product:', {
+      firstProductId,
+      productType,
+      allSelectedProducts: selectedProducts,
+    });
+
     if (productType) {
       // Try to find a mockup for this product type
       const mockupsForProduct = getMockupsByProduct(productType);
       if (mockupsForProduct.length > 0) {
         setMockup(mockupsForProduct[0]); // Use the first available mockup
+        console.log('[Canvas Step] Mockup selected:', mockupsForProduct[0].name);
       } else {
+        // Fallback to default if no mockup found
         setMockup(getDefaultMockup());
+        console.log('[Canvas Step] No mockup found for product type, using default');
       }
     } else {
+      // Product ID not in map - use default
       setMockup(getDefaultMockup());
+      console.warn('[Canvas Step] Product ID not mapped:', firstProductId);
     }
   }, [selectedProducts]);
 

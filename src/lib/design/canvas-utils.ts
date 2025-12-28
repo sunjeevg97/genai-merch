@@ -129,7 +129,19 @@ export async function loadImageOntoCanvas(
       fabric.Image.fromURL(
         imageUrl,
         (img: fabric.Image) => {
+          console.log('[Canvas] Image callback received:', {
+            hasImg: !!img,
+            width: img?.width,
+            height: img?.height,
+            src: img?.getSrc?.(),
+          });
+
           if (!img || !img.width || !img.height) {
+            console.error('[Canvas] Image loaded but invalid:', {
+              hasImg: !!img,
+              width: img?.width,
+              height: img?.height,
+            });
             reject(new Error('Failed to load image'));
             return;
           }
@@ -163,6 +175,10 @@ export async function loadImageOntoCanvas(
 
           console.log('[Canvas] Image loaded and positioned');
           resolve(img);
+        },
+        (error: Error | Event) => {
+          console.error('[Canvas] Fabric.js image load error:', error);
+          reject(new Error(`Failed to load image from URL: ${imageUrl}`));
         },
         {
           crossOrigin: 'anonymous',

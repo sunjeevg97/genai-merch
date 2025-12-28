@@ -159,7 +159,7 @@ export function CanvasStep() {
         const { initializeCanvas, setupPrintAreaBounds } = await import('@/lib/design/canvas-utils');
 
         const canvas = initializeCanvas(canvasRef.current!, 600, 700, {
-          backgroundColor: '#f8f9fa',
+          backgroundColor: 'transparent', // Transparent so mockup shows through
           selectionColor: 'rgba(100, 150, 255, 0.3)',
           selectionBorderColor: '#4a90e2',
         });
@@ -536,10 +536,10 @@ export function CanvasStep() {
         <div className="lg:col-span-2">
           <Card className="overflow-hidden">
             <CardContent className="p-6">
-              <div className="relative bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg p-8 flex items-center justify-center">
+              <div className="relative bg-white rounded-lg p-8 flex items-center justify-center">
                 {/* Mockup Background */}
                 {mockup && (
-                  <div className="absolute inset-0 flex items-center justify-center opacity-30">
+                  <div className="absolute inset-0 flex items-center justify-center">
                     <Image
                       src={mockup.imageUrl}
                       alt={mockup.name}

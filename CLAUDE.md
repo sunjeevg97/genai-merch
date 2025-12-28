@@ -1669,6 +1669,369 @@ Examples:
 
 ---
 
+## Shopping Cart System
+
+GenAI-Merch uses Zustand for client-side cart state management with localStorage persistence. The cart supports custom designs, quantity management, and real-time price calculations.
+
+### Cart Architecture
+
+**Location**: `src/lib/cart/store.ts`
+
+**State Management**: Zustand with persist middleware
+
+**Key Features**:
+- Client-side state management with localStorage persistence
+- Real-time subtotal and item count calculations
+- Support for custom designs on products
+- Quantity controls with validation (1-99 items)
+- Duplicate detection (same variant + design)
+- Cart drawer state management
+
+### Cart Store Structure
+
+```typescript
+interface CartItem {
+  id: string;                    // Temporary UI ID (auto-generated)
+  productVariantId: string;      // Database ProductVariant ID
+  product: {
+    name: string;                // Product name
+    imageUrl: string;            // Product image
+    productType: string;         // e.g., "t-shirt", "mug"
+  };
+  variant: {
+    name: string;                // Variant name (e.g., "Medium / Black")
+    size: string | null;         // Size (e.g., "Medium", "Large")
+    color: string | null;        // Color (e.g., "Black", "White")
+  };
+  design: {
+    id: string;                  // Design database ID
+    imageUrl: string;            // Full design image URL
+    thumbnailUrl?: string;       // Optional thumbnail
+  } | null;                      // Null for non-custom products
+  quantity: number;              // Item quantity (1-99)
+  unitPrice: number;             // Price per item in cents
+}
+
+interface CartStore {
+  // State
+  items: CartItem[];             // All cart items
+  isOpen: boolean;               // Cart drawer open/closed
+
+  // Computed Values (auto-calculated)
+  subtotal: number;              // Sum of all item totals (cents)
+  itemCount: number;             // Sum of all quantities
+
+  // Actions
+  addItem(item);                 // Add item to cart
+  removeItem(itemId);            // Remove item from cart
+  updateQuantity(itemId, qty);   // Update item quantity
+  clearCart();                   // Remove all items
+  openCart();                    // Open cart drawer
+  closeCart();                   // Close cart drawer
+}
+```
+
+### Usage Patterns
+
+#### Adding Items to Cart
+
+```typescript
+'use client';
+
+import { useCart } from '@/lib/cart/store';
+
+function ProductPage({ product, variant }) {
+  const { addItem } = useCart();
+
+  const handleAddToCart = () => {
+    addItem({
+      productVariantId: variant.id,
+      product: {
+        name: product.name,
+        imageUrl: product.imageUrl,
+        productType: product.productType,
+      },
+      variant: {
+        name: variant.name,
+        size: variant.size,
+        color: variant.color,
+      },
+      design: null, // or { id, imageUrl, thumbnailUrl } for custom designs
+      quantity: 1,
+      unitPrice: variant.price, // in cents
+    });
+  };
+
+  return (
+    <button onClick={handleAddToCart}>
+      Add to Cart
+    </button>
+  );
+}
+```
+
+#### Using Cart State
+
+```typescript
+import { useCart } from '@/lib/cart/store';
+
+function CartButton() {
+  const { itemCount, openCart } = useCart();
+
+  return (
+    <button onClick={openCart}>
+      Cart ({itemCount})
+    </button>
+  );
+}
+```
+
+#### Optimized Selectors
+
+```typescript
+import {
+  useCartItems,
+  useCartSubtotal,
+  useCartItemCount,
+  useCartIsOpen
+} from '@/lib/cart/store';
+
+// Only re-renders when items change
+const items = useCartItems();
+
+// Only re-renders when subtotal changes
+const subtotal = useCartSubtotal();
+
+// Only re-renders when item count changes
+const itemCount = useCartItemCount();
+
+// Only re-renders when drawer state changes
+const isOpen = useCartIsOpen();
+```
+
+### Cart Persistence
+
+**Storage Key**: `genai-merch-cart`
+
+**Persisted Data**: Only `items` array is persisted to localStorage
+
+**Computed Values**: `subtotal` and `itemCount` are recalculated on app load
+
+**Rehydration**:
+```typescript
+onRehydrateStorage: () => (state) => {
+  if (state) {
+    state.subtotal = state._calculateSubtotal();
+    state.itemCount = state._calculateItemCount();
+  }
+}
+```
+
+**Why Persist Only Items?**
+- UI state (`isOpen`) should not persist across sessions
+- Computed values (`subtotal`, `itemCount`) are derived from items
+- Smaller localStorage footprint
+- Prevents stale computed values
+
+### Cart Page Components
+
+#### Cart Item (`components/cart/cart-item.tsx`)
+
+Displays individual cart item with:
+- Product/design image with "Custom" badge
+- Product name and variant details (size, color)
+- Quantity controls (+/- buttons, input field)
+- Price per item and total price
+- Remove button
+- Mobile-responsive layout
+
+**Features**:
+- Quantity validation (1-99)
+- Responsive price display (desktop vs mobile)
+- Image fallback for missing images
+- Custom design badge overlay
+
+#### Cart Summary (`components/cart/cart-summary.tsx`)
+
+Shows order summary:
+- Item count and subtotal
+- Shipping estimate (calculated at checkout)
+- Tax estimate (calculated at checkout)
+- Disclaimer about final costs
+- Sticky positioning (desktop)
+
+#### Checkout Button (`components/cart/checkout-button.tsx`)
+
+Handles checkout initiation:
+- Disabled when cart is empty
+- Loading state during processing
+- Error handling with toast notifications
+- Future: Stripe checkout integration
+
+### Cart Page (`app/cart/page.tsx`)
+
+**Features**:
+- Empty state with CTA buttons
+- Item list with quantity controls
+- Cart summary sidebar (desktop)
+- Mobile-optimized layout (sticky summary at bottom)
+- Continue shopping link
+- Real-time price calculations
+
+**Empty State**:
+- Friendly illustration with PackageOpen icon
+- "Your cart is empty" message
+- Two CTAs: "Start Designing" and "Browse Products"
+- Links to `/design` and `/products`
+
+**Layout**:
+- Desktop: 2-column grid (items left, summary right)
+- Mobile: Single column, summary at bottom
+- Responsive breakpoint: `lg:` (1024px)
+
+### Duplicate Item Detection
+
+When adding items to cart, the store checks if an identical item already exists:
+
+```typescript
+const existingItemIndex = items.findIndex(
+  (i) =>
+    i.productVariantId === item.productVariantId &&
+    i.design?.id === item.design?.id
+);
+
+if (existingItemIndex >= 0) {
+  // Increase quantity of existing item
+  newItems = items.map((i, index) =>
+    index === existingItemIndex
+      ? { ...i, quantity: i.quantity + item.quantity }
+      : i
+  );
+} else {
+  // Add as new item
+  newItems = [...items, { ...item, id: generateCartItemId() }];
+}
+```
+
+**Logic**:
+- Same variant + same design = increase quantity
+- Same variant + different design = separate items
+- Different variant = separate items
+
+### Price Calculations
+
+**Unit Price**: Always stored in cents (e.g., `2299` = $22.99)
+
+**Item Total**: `unitPrice × quantity`
+
+**Subtotal**: Sum of all item totals
+```typescript
+_calculateSubtotal: () => {
+  return items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+}
+```
+
+**Display Formatting**:
+```typescript
+function formatPrice(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`;
+}
+```
+
+### Best Practices
+
+**1. Always Use Store Actions**
+```typescript
+// ✅ Good
+const { addItem, removeItem } = useCart();
+addItem(newItem);
+
+// ❌ Bad - Never mutate state directly
+const { items } = useCart();
+items.push(newItem); // This won't work!
+```
+
+**2. Use Optimized Selectors**
+```typescript
+// ✅ Good - Only re-renders when itemCount changes
+const itemCount = useCartItemCount();
+
+// ❌ Less optimal - Re-renders on any store change
+const { itemCount } = useCart();
+```
+
+**3. Handle Edge Cases**
+```typescript
+// Check if cart is empty before checkout
+if (itemCount === 0) {
+  toast.error('Your cart is empty');
+  return;
+}
+
+// Validate quantity before updating
+const clampedQuantity = Math.max(1, Math.min(99, newQuantity));
+updateQuantity(itemId, clampedQuantity);
+```
+
+**4. Provide User Feedback**
+```typescript
+import { toast } from 'sonner';
+
+const handleAddToCart = () => {
+  addItem(newItem);
+  toast.success('Added to cart', {
+    description: `${product.name} has been added to your cart.`,
+  });
+};
+```
+
+### Future Enhancements
+
+**Cart Drawer**:
+- Slide-out drawer component (instead of full page)
+- Quick add/remove without leaving current page
+- Mini cart preview in header
+
+**Cart Recovery**:
+- Email abandoned cart reminders
+- Save cart to user account (database)
+- Sync cart across devices
+
+**Advanced Features**:
+- Bulk discounts (e.g., 10+ items = 10% off)
+- Promo codes and coupons
+- Gift wrapping options
+- Estimated delivery dates
+
+**Checkout Integration**:
+- Stripe Checkout session creation
+- Printful order submission
+- Order confirmation emails
+
+### Troubleshooting
+
+**Cart Not Persisting**:
+- Check localStorage quota (usually 5-10MB)
+- Verify `genai-merch-cart` key in localStorage
+- Check browser console for errors
+
+**Subtotal Incorrect**:
+- Prices must be in cents (not dollars)
+- Verify `unitPrice` is a number, not string
+- Check for floating-point precision errors
+
+**Items Duplicating**:
+- Ensure `productVariantId` is consistent
+- Check `design?.id` comparison logic
+- Verify `generateCartItemId()` creates unique IDs
+
+**Quantity Validation Not Working**:
+- Input type must be "number"
+- Use `parseInt()` when reading input value
+- Clamp values to 1-99 range
+
+---
+
 ## Key Features & Modules
 
 ### 1. AI Design Generation

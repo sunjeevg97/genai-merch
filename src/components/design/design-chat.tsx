@@ -9,13 +9,17 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Loader2, Send, Wand2, Trash2 } from 'lucide-react';
+import { Loader2, Send, Wand2, Trash2, RefreshCw, AlertCircle } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import Image from 'next/image';
 import type { EventType, BrandAssets } from '@/lib/store/design-wizard';
+import { createAppError, getErrorMessage, isRetryableError, ErrorType, type AppError } from '@/lib/utils/errors';
+import { logError } from '@/lib/utils/errors';
 
 /**
  * Component Props
@@ -74,10 +78,13 @@ export function DesignChat({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [chatError, setChatError] = useState<AppError | null>(null);
 
   // Design generation state
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState<AppError | null>(null);
   const [generatedDesigns, setGeneratedDesigns] = useState<GeneratedDesign[]>([]);
+  const [lastPrompt, setLastPrompt] = useState<string>('');
 
   // Refs
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -124,6 +131,7 @@ export function DesignChat({
     setInput(''); // Clear input immediately
     setMessages((prev) => [...prev, userMsg]);
     setIsLoading(true);
+    setChatError(null); // Clear previous errors
 
     try {
       const response = await fetch('/api/chat', {
@@ -140,7 +148,13 @@ export function DesignChat({
       });
 
       if (!response.ok) {
-        throw new Error('Failed to send message');
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.message || errorData.error || 'Failed to send message';
+
+        if (response.status === 429) {
+          throw createAppError(new Error(errorMessage), ErrorType.RATE_LIMIT_ERROR);
+        }
+        throw new Error(errorMessage);
       }
 
       console.log('[DesignChat] Response received, status:', response.status);
@@ -199,9 +213,25 @@ export function DesignChat({
       }
     } catch (error) {
       console.error('[DesignChat] Error:', error);
-      toast.error('Failed to send message. Please try again.');
+      logError(error, 'DesignChat - handleSubmit');
+
+      const appError = createAppError(error, ErrorType.API_ERROR);
+      setChatError(appError);
+      toast.error(getErrorMessage(error));
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  /**
+   * Retry chat after error
+   */
+  const retryChatMessage = () => {
+    setChatError(null);
+    // Re-submit the last user message
+    const lastUserMsg = messages.filter((m) => m.role === 'user').pop();
+    if (lastUserMsg) {
+      setInput(lastUserMsg.content);
     }
   };
 
@@ -257,6 +287,8 @@ export function DesignChat({
 
     console.log('[DesignChat] Starting design generation with prompt:', prompt);
     setIsGenerating(true);
+    setGenerationError(null); // Clear previous errors
+    setLastPrompt(prompt); // Save for retry
 
     try {
       const response = await fetch('/api/generate-design', {
@@ -273,8 +305,16 @@ export function DesignChat({
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to generate design');
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.message || errorData.error || 'Failed to generate design';
+
+        // Handle specific error types
+        if (response.status === 429) {
+          throw createAppError(new Error(errorMessage), ErrorType.RATE_LIMIT_ERROR);
+        } else if (response.status === 400 && errorMessage.toLowerCase().includes('content policy')) {
+          throw createAppError(new Error(errorMessage), ErrorType.AI_CONTENT_POLICY_ERROR);
+        }
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();
@@ -298,9 +338,24 @@ export function DesignChat({
       toast.success('Design generated successfully!');
     } catch (error) {
       console.error('[Generate Design] Error:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to generate design');
+      logError(error, 'DesignChat - handleGenerateDesign');
+
+      const appError = createAppError(error, ErrorType.AI_GENERATION_ERROR);
+      setGenerationError(appError);
+      toast.error(getErrorMessage(error));
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  /**
+   * Retry design generation after error
+   */
+  const retryGeneration = () => {
+    setGenerationError(null);
+    if (lastPrompt) {
+      // Trigger generation with the last prompt
+      handleGenerateDesign();
     }
   };
 
@@ -400,16 +455,42 @@ export function DesignChat({
             </div>
           ))}
 
-          {/* Loading indicator */}
+          {/* Loading indicator with skeleton */}
           {isLoading && (
             <div className="flex justify-start">
-              <div className="bg-muted rounded-lg px-4 py-2">
-                <div className="flex items-center gap-2">
+              <div className="bg-muted rounded-lg px-4 py-2 min-w-[200px]">
+                <div className="flex items-center gap-2 mb-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   <p className="text-sm text-muted-foreground">Thinking...</p>
                 </div>
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-3/4" />
+                </div>
               </div>
             </div>
+          )}
+
+          {/* Chat Error Display */}
+          {chatError && !isLoading && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Chat Error</AlertTitle>
+              <AlertDescription className="space-y-2">
+                <p>{chatError.message}</p>
+                {isRetryableError(chatError) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={retryChatMessage}
+                    className="mt-2"
+                  >
+                    <RefreshCw className="h-3 w-3 mr-2" />
+                    Retry
+                  </Button>
+                )}
+              </AlertDescription>
+            </Alert>
           )}
 
           {/* Generated Designs */}
@@ -434,21 +515,51 @@ export function DesignChat({
             </div>
           ))}
 
-          {/* Design generation loading */}
+          {/* Design generation loading with skeleton */}
           {isGenerating && (
             <div className="flex justify-center">
               <div className="bg-muted rounded-lg p-4 max-w-md w-full">
-                <div className="flex items-center gap-2 mb-2">
+                <div className="flex items-center gap-2 mb-3">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   <p className="text-sm text-muted-foreground">
                     Generating your design...
                   </p>
                 </div>
-                <div className="aspect-square w-full bg-muted-foreground/10 rounded-md flex items-center justify-center">
+                <div className="aspect-square w-full bg-muted-foreground/10 rounded-md flex flex-col items-center justify-center gap-3">
                   <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  <p className="text-xs text-muted-foreground">This may take 15-20 seconds</p>
+                </div>
+                <div className="mt-3 space-y-2">
+                  <Skeleton className="h-3 w-full" />
+                  <Skeleton className="h-3 w-2/3" />
                 </div>
               </div>
             </div>
+          )}
+
+          {/* Generation Error Display */}
+          {generationError && !isGenerating && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Design Generation Failed</AlertTitle>
+              <AlertDescription className="space-y-2">
+                <p>{generationError.message}</p>
+                {generationError.details && (
+                  <p className="text-xs opacity-75">{generationError.details}</p>
+                )}
+                {isRetryableError(generationError) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={retryGeneration}
+                    className="mt-2"
+                  >
+                    <RefreshCw className="h-3 w-3 mr-2" />
+                    Retry Generation
+                  </Button>
+                )}
+              </AlertDescription>
+            </Alert>
           )}
         </div>
       </div>

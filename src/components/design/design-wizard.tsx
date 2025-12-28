@@ -77,8 +77,8 @@ export function DesignWizard() {
     <div className="min-h-screen bg-background">
       {/* Header with Progress Indicator */}
       <div className="border-b bg-card sticky top-0 z-10 shadow-sm">
-        <div className="container mx-auto px-4 py-6 max-w-7xl">
-          <div className="space-y-4">
+        <div className="container mx-auto px-4 py-4 max-w-7xl">
+          <div className="space-y-3">
             {/* Title */}
             <div>
               <h1 className="text-2xl font-bold">Design Wizard</h1>
@@ -177,7 +177,7 @@ export function DesignWizard() {
       </div>
 
       {/* Main Content with Transitions */}
-      <div className="container mx-auto px-4 py-12 max-w-7xl">
+      <div className="container mx-auto px-4 py-8 max-w-7xl">
         <AnimatePresence mode="wait">
           <motion.div
             key={currentStep}

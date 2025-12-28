@@ -15,12 +15,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Progress } from '@/components/ui/progress';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useDropzone } from 'react-dropzone';
-import { Upload, X, Plus, Loader2 } from 'lucide-react';
+import { Upload, X, Plus, Loader2, AlertCircle, RefreshCw, CheckCircle } from 'lucide-react';
 import Image from 'next/image';
 import { toast } from 'sonner';
 import { uploadDesignFile } from '@/lib/supabase/storage';
 import { createBrowserClient } from '@/lib/supabase/client';
+import { createAppError, getErrorMessage, isRetryableError, ErrorType, type AppError } from '@/lib/utils/errors';
+import { logError } from '@/lib/utils/errors';
 
 /**
  * Uploaded Logo Interface
@@ -30,6 +34,9 @@ interface UploadedLogo {
   url: string;
   filename: string;
   isUploading?: boolean;
+  uploadProgress?: number;
+  error?: AppError;
+  file?: File; // Save file for retry
 }
 
 /**
@@ -57,6 +64,7 @@ export function BrandAssetsStep() {
   const [voice, setVoiceInput] = useState(brandAssets.voice);
   const [isUploading, setIsUploading] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<AppError | null>(null);
 
   // Character counter
   const maxVoiceChars = 500;
@@ -122,12 +130,13 @@ export function BrandAssetsStep() {
       }
 
       setIsUploading(true);
+      setUploadError(null); // Clear previous errors
 
       // Upload each file
       for (const file of acceptedFiles) {
         const tempId = `temp-${Date.now()}-${Math.random()}`;
 
-        // Add placeholder
+        // Add placeholder with progress
         setUploadedLogos((prev) => [
           ...prev,
           {
@@ -135,30 +144,66 @@ export function BrandAssetsStep() {
             url: URL.createObjectURL(file),
             filename: file.name,
             isUploading: true,
+            uploadProgress: 0,
+            file, // Save for retry
           },
         ]);
 
         try {
+          // Simulate progress updates
+          const progressInterval = setInterval(() => {
+            setUploadedLogos((prev) =>
+              prev.map((logo) =>
+                logo.id === tempId && logo.uploadProgress! < 90
+                  ? { ...logo, uploadProgress: logo.uploadProgress! + 10 }
+                  : logo
+              )
+            );
+          }, 200);
+
           const result = await uploadDesignFile(file, userId);
 
+          clearInterval(progressInterval);
+
           if (result.success && result.url) {
-            // Update with actual URL
+            // Update with actual URL and 100% progress
             setUploadedLogos((prev) =>
               prev.map((logo) =>
                 logo.id === tempId
-                  ? { ...logo, url: result.url!, isUploading: false }
+                  ? { ...logo, url: result.url!, isUploading: false, uploadProgress: 100, error: undefined }
                   : logo
               )
             );
             addLogo(result.url);
             toast.success(`${file.name} uploaded successfully`);
           } else {
-            // Remove failed upload
-            setUploadedLogos((prev) => prev.filter((logo) => logo.id !== tempId));
+            // Mark as failed but keep in list for retry
+            const error = createAppError(
+              new Error(result.error || 'Upload failed'),
+              ErrorType.UPLOAD_ERROR
+            );
+            setUploadedLogos((prev) =>
+              prev.map((logo) =>
+                logo.id === tempId
+                  ? { ...logo, isUploading: false, error }
+                  : logo
+              )
+            );
+            logError(error, 'BrandAssetsStep - uploadFile');
             toast.error(result.error || `Failed to upload ${file.name}`);
           }
         } catch (error) {
-          setUploadedLogos((prev) => prev.filter((logo) => logo.id !== tempId));
+          console.error('[BrandAssetsStep] Upload error:', error);
+          logError(error, 'BrandAssetsStep - uploadFile');
+
+          const appError = createAppError(error, ErrorType.UPLOAD_ERROR);
+          setUploadedLogos((prev) =>
+            prev.map((logo) =>
+              logo.id === tempId
+                ? { ...logo, isUploading: false, error: appError }
+                : logo
+            )
+          );
           toast.error(`Error uploading ${file.name}`);
         }
       }
@@ -181,13 +226,88 @@ export function BrandAssetsStep() {
   });
 
   /**
+   * Retry failed upload
+   */
+  const handleRetryUpload = async (logoId: string) => {
+    const logo = uploadedLogos.find((l) => l.id === logoId);
+    if (!logo || !logo.file || !userId) return;
+
+    // Reset error and set uploading state
+    setUploadedLogos((prev) =>
+      prev.map((l) =>
+        l.id === logoId
+          ? { ...l, isUploading: true, uploadProgress: 0, error: undefined }
+          : l
+      )
+    );
+
+    try {
+      // Simulate progress updates
+      const progressInterval = setInterval(() => {
+        setUploadedLogos((prev) =>
+          prev.map((l) =>
+            l.id === logoId && l.uploadProgress! < 90
+              ? { ...l, uploadProgress: l.uploadProgress! + 10 }
+              : l
+          )
+        );
+      }, 200);
+
+      const result = await uploadDesignFile(logo.file, userId);
+
+      clearInterval(progressInterval);
+
+      if (result.success && result.url) {
+        // Update with actual URL
+        setUploadedLogos((prev) =>
+          prev.map((l) =>
+            l.id === logoId
+              ? { ...l, url: result.url!, isUploading: false, uploadProgress: 100, error: undefined }
+              : l
+          )
+        );
+        addLogo(result.url);
+        toast.success(`${logo.filename} uploaded successfully`);
+      } else {
+        // Mark as failed
+        const error = createAppError(
+          new Error(result.error || 'Upload failed'),
+          ErrorType.UPLOAD_ERROR
+        );
+        setUploadedLogos((prev) =>
+          prev.map((l) =>
+            l.id === logoId
+              ? { ...l, isUploading: false, error }
+              : l
+          )
+        );
+        toast.error(result.error || `Failed to upload ${logo.filename}`);
+      }
+    } catch (error) {
+      logError(error, 'BrandAssetsStep - retryUpload');
+      const appError = createAppError(error, ErrorType.UPLOAD_ERROR);
+      setUploadedLogos((prev) =>
+        prev.map((l) =>
+          l.id === logoId
+            ? { ...l, isUploading: false, error: appError }
+            : l
+        )
+      );
+      toast.error(`Error uploading ${logo.filename}`);
+    }
+  };
+
+  /**
    * Remove uploaded logo
    */
   const handleRemoveLogo = (logoId: string) => {
     const logo = uploadedLogos.find((l) => l.id === logoId);
     if (logo) {
       setUploadedLogos((prev) => prev.filter((l) => l.id !== logoId));
-      removeLogo(logo.url);
+      if (!logo.error) {
+        // Only remove from store if upload was successful
+        removeLogo(logo.url);
+      }
       toast.success('Logo removed');
     }
   };
@@ -305,39 +425,72 @@ export function BrandAssetsStep() {
             {uploadedLogos.length > 0 && (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 {uploadedLogos.map((logo) => (
-                  <div
-                    key={logo.id}
-                    className="relative aspect-square bg-muted rounded-lg overflow-hidden group"
-                  >
-                    {logo.isUploading ? (
-                      <div className="absolute inset-0 flex items-center justify-center bg-muted">
-                        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                      </div>
-                    ) : (
-                      <>
-                        <Image
-                          src={logo.url}
-                          alt={logo.filename}
-                          fill
-                          className="object-contain p-2"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveLogo(logo.id)}
-                          className="
-                            absolute top-2 right-2
-                            bg-destructive text-destructive-foreground
-                            rounded-full p-1
-                            opacity-0 group-hover:opacity-100
-                            transition-opacity duration-200
-                            hover:scale-110
-                          "
-                          aria-label="Remove logo"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      </>
+                  <div key={logo.id} className="space-y-2">
+                    <div className="relative aspect-square bg-muted rounded-lg overflow-hidden group">
+                      {logo.isUploading ? (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-muted gap-2">
+                          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                          <p className="text-xs text-muted-foreground">
+                            {logo.uploadProgress ?? 0}%
+                          </p>
+                        </div>
+                      ) : logo.error ? (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-destructive/10 gap-2 p-4">
+                          <AlertCircle className="h-8 w-8 text-destructive" />
+                          <p className="text-xs text-destructive text-center">
+                            Upload failed
+                          </p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleRetryUpload(logo.id)}
+                            className="mt-1"
+                          >
+                            <RefreshCw className="h-3 w-3 mr-1" />
+                            Retry
+                          </Button>
+                        </div>
+                      ) : (
+                        <>
+                          <Image
+                            src={logo.url}
+                            alt={logo.filename}
+                            fill
+                            className="object-contain p-2"
+                          />
+                          {logo.uploadProgress === 100 && (
+                            <div className="absolute top-2 left-2 bg-green-500 text-white rounded-full p-1">
+                              <CheckCircle className="h-4 w-4" />
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveLogo(logo.id)}
+                            className="
+                              absolute top-2 right-2
+                              bg-destructive text-destructive-foreground
+                              rounded-full p-1
+                              opacity-0 group-hover:opacity-100
+                              transition-opacity duration-200
+                              hover:scale-110
+                            "
+                            aria-label="Remove logo"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Progress bar during upload */}
+                    {logo.isUploading && (
+                      <Progress value={logo.uploadProgress ?? 0} className="h-1" />
                     )}
+
+                    {/* Filename */}
+                    <p className="text-xs text-muted-foreground truncate">
+                      {logo.filename}
+                    </p>
                   </div>
                 ))}
               </div>

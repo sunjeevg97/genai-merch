@@ -27,6 +27,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   ArrowLeft,
   Download,
@@ -38,12 +40,16 @@ import {
   ZoomIn,
   ZoomOut,
   Trash2,
+  AlertCircle,
+  RefreshCw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useDropzone } from 'react-dropzone';
 import { uploadDesignFile } from '@/lib/supabase/storage';
 import { createBrowserClient } from '@/lib/supabase/client';
 import Image from 'next/image';
+import { createAppError, getErrorMessage, isRetryableError, ErrorType, type AppError } from '@/lib/utils/errors';
+import { logError } from '@/lib/utils/errors';
 
 /**
  * Product ID to Product Type mapping
@@ -86,6 +92,8 @@ export function CanvasStep() {
   const [userId, setUserId] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [hasLoadedDesign, setHasLoadedDesign] = useState(false);
+  const [isLoadingDesign, setIsLoadingDesign] = useState(false);
+  const [loadError, setLoadError] = useState<AppError | null>(null);
 
   // Memoize first brand logo to prevent re-render issues
   const firstBrandLogo = useMemo(() => {
@@ -229,6 +237,9 @@ export function CanvasStep() {
 
       console.log('[Canvas Step] Canvas ref confirmed, proceeding with image load');
 
+      setIsLoadingDesign(true);
+      setLoadError(null);
+
       try {
         // Dynamic import to avoid SSR issues
         const { loadImageOntoCanvas } = await import('@/lib/design/canvas-utils');
@@ -252,14 +263,21 @@ export function CanvasStep() {
           console.log('[Canvas Step] Attempting to load image onto canvas...');
           await loadImageOntoCanvas(canvas, imageUrl, mockup.printArea);
           setHasLoadedDesign(true);
+          setIsLoadingDesign(false);
           console.log('[Canvas Step] Successfully loaded design onto canvas');
           toast.success('Design loaded onto canvas');
         } else {
           console.log('[Canvas Step] No image URL to load');
+          setIsLoadingDesign(false);
         }
       } catch (error) {
         console.error('[Canvas Step] Failed to load design image:', error);
-        toast.error('Failed to load design image');
+        logError(error, 'CanvasStep - loadDesignImage');
+
+        const appError = createAppError(error, ErrorType.IMAGE_LOAD_ERROR);
+        setLoadError(appError);
+        setIsLoadingDesign(false);
+        toast.error(getErrorMessage(error));
       }
     };
 
@@ -506,6 +524,14 @@ export function CanvasStep() {
   };
 
   /**
+   * Retry loading design after error
+   */
+  const retryLoadDesign = () => {
+    setLoadError(null);
+    setHasLoadedDesign(false); // Force reload
+  };
+
+  /**
    * Get selected design info
    */
   const selectedDesign = generatedDesigns.find((d) => d.id === selectedDesignId);
@@ -533,25 +559,66 @@ export function CanvasStep() {
       {/* Main Canvas Area */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left: Canvas */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 space-y-4">
+          {/* Loading State */}
+          {isLoadingDesign && (
+            <Alert>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <AlertTitle>Loading Design</AlertTitle>
+              <AlertDescription>
+                <div className="space-y-2">
+                  <p>Loading your design onto the canvas...</p>
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-3/4" />
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Error Display */}
+          {loadError && !isLoadingDesign && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Failed to Load Design</AlertTitle>
+              <AlertDescription className="space-y-2">
+                <p>{loadError.message}</p>
+                {loadError.details && (
+                  <p className="text-xs opacity-75">{loadError.details}</p>
+                )}
+                {isRetryableError(loadError) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={retryLoadDesign}
+                    className="mt-2"
+                  >
+                    <RefreshCw className="h-3 w-3 mr-2" />
+                    Retry Loading
+                  </Button>
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
+
           <Card className="overflow-hidden">
             <CardContent className="p-6">
-              <div className="relative bg-white rounded-lg p-8 flex items-center justify-center">
-                {/* Mockup Background */}
-                {mockup && (
-                  <div className="absolute inset-0 flex items-center justify-center">
+              <div className="relative bg-white rounded-lg p-8">
+                <div className="relative w-[600px] h-[700px] mx-auto">
+                  {/* Mockup Background */}
+                  {mockup && (
                     <Image
                       src={mockup.imageUrl}
                       alt={mockup.name}
                       width={600}
                       height={700}
-                      className="object-contain"
+                      className="absolute inset-0 object-contain"
+                      priority
                     />
-                  </div>
-                )}
+                  )}
 
-                {/* Canvas Element */}
-                <canvas ref={canvasRef} className="relative z-10" />
+                  {/* Canvas Element - Absolutely positioned to overlay mockup */}
+                  <canvas ref={canvasRef} className="absolute inset-0 z-10" />
+                </div>
               </div>
             </CardContent>
           </Card>

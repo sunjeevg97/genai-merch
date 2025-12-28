@@ -3165,6 +3165,360 @@ All generation requests are logged with:
 
 ---
 
+### Product Catalog Sync API
+
+**Endpoint**: `GET /api/printful/sync-catalog`
+
+Syncs products from Printful API into our database. Called by cron job to keep product catalog up-to-date.
+
+#### Overview
+
+The product sync process:
+1. Fetches all products from Printful API
+2. Filters to only supported categories and product types
+3. Upserts products and variants into database
+4. Applies 2x markup pricing strategy
+5. Returns sync statistics
+
+**Supported Categories**:
+- Apparel (t-shirts, sweatshirts, hoodies, polos, tank tops)
+- Accessories (hats, caps, beanies, tote bags, stickers)
+- Home & Living (mugs, cups)
+
+**Excluded Product Types**:
+- Baby clothes
+- Posters
+- Phone cases
+- Canvas prints
+- Pillows, blankets, towels
+- Leggings, yoga wear
+
+#### Request
+
+**Method**: GET
+**Authentication**: Required (`x-cron-secret` header)
+
+**Headers**:
+```bash
+x-cron-secret: your_cron_secret_here
+```
+
+**Authorization**:
+- Endpoint verifies `x-cron-secret` header matches `CRON_SECRET` environment variable
+- Returns 401 if secret is missing or incorrect
+- Prevents unauthorized catalog syncs
+
+#### Response
+
+**Success (200)**:
+```json
+{
+  "products_synced": 45,
+  "variants_synced": 1234,
+  "products_skipped": 407,
+  "errors": [],
+  "duration_ms": 245678
+}
+```
+
+**With Errors** (still 200):
+```json
+{
+  "products_synced": 43,
+  "variants_synced": 1200,
+  "products_skipped": 407,
+  "errors": [
+    {
+      "product_id": 123,
+      "error": "Failed to fetch variants: Network timeout"
+    },
+    {
+      "product_id": 456,
+      "variant_id": 7890,
+      "error": "Invalid variant data"
+    }
+  ],
+  "duration_ms": 245678
+}
+```
+
+**Error (401 - Unauthorized)**:
+```json
+{
+  "error": "Unauthorized"
+}
+```
+
+**Error (500 - Server Error)**:
+```json
+{
+  "error": "Server configuration error"
+}
+```
+
+#### Pricing Strategy
+
+**Formula**: `(Printful Base Price × 2) - $0.01`
+
+**Steps**:
+1. Multiply Printful base price by 2.0 (100% markup)
+2. Round to nearest dollar
+3. Subtract $0.01 to get .99 ending
+
+**Examples**:
+- Printful: $11.50 → Retail: $22.99
+- Printful: $24.95 → Retail: $48.99
+- Printful: $18.00 → Retail: $35.99
+
+**Why .99 pricing?**
+- Psychological pricing strategy
+- Common in retail/e-commerce
+- Appears more affordable than rounded prices
+
+**Price Storage**:
+- All prices stored in cents (integer)
+- Example: $22.99 = 2299 cents
+- Prevents floating-point precision issues
+
+#### Product Filtering
+
+**Helper Function**: `shouldIncludeProduct(product)`
+**Location**: `src/lib/printful/products.ts`
+
+```typescript
+import { shouldIncludeProduct } from '@/lib/printful/products';
+
+const allProducts = await printful.getProducts();
+const supported = allProducts.filter(shouldIncludeProduct);
+```
+
+**Filtering Logic**:
+1. Exclude discontinued products
+2. Check for excluded keywords (baby, poster, phone-case, etc.)
+3. Match supported product types or keywords
+4. Default: exclude if no match
+
+#### Variant Parsing
+
+**Helper Function**: `parseVariantAttributes(variantName)`
+
+Extracts size and color from Printful variant names:
+
+```typescript
+import { parseVariantAttributes } from '@/lib/printful/products';
+
+parseVariantAttributes("Medium / Black");
+// { size: "Medium", color: "Black" }
+
+parseVariantAttributes("S / White");
+// { size: "S", color: "White" }
+
+parseVariantAttributes("11oz");
+// { size: "11oz", color: null }
+```
+
+**Variant Name Formats**:
+- Standard: "Size / Color" (most common)
+- Size only: "11oz", "One Size"
+- Handles XXS, XS, S, M, L, XL, XXL, XXXL
+
+#### Database Operations
+
+**Product Upsert**:
+```typescript
+await prisma.product.upsert({
+  where: { printfulId: product.id },
+  update: {
+    name: product.title,
+    basePrice: lowestVariantPrice,
+    imageUrl: productImage,
+    metadata: productData,
+    // ...
+  },
+  create: {
+    printfulId: product.id,
+    name: product.title,
+    category: 'apparel',
+    // ...
+  },
+});
+```
+
+**Variant Upsert**:
+```typescript
+await prisma.productVariant.upsert({
+  where: { printfulVariantId: variant.id },
+  update: {
+    price: retailPriceCents,
+    inStock: variant.in_stock,
+    // ...
+  },
+  create: {
+    printfulVariantId: variant.id,
+    productId: dbProduct.id,
+    price: retailPriceCents,
+    // ...
+  },
+});
+```
+
+**Transaction Safety**:
+- Each product synced independently
+- If one product fails, others continue
+- Errors logged but don't fail entire sync
+- Useful for partial syncs or API hiccups
+
+#### Triggering Sync
+
+**Manual Trigger** (for testing):
+```bash
+curl -X GET http://localhost:3000/api/printful/sync-catalog \
+  -H "x-cron-secret: your_cron_secret_here"
+```
+
+**Production Trigger** (Vercel Cron):
+```json
+// vercel.json
+{
+  "crons": [{
+    "path": "/api/printful/sync-catalog",
+    "schedule": "0 0 * * *"
+  }]
+}
+```
+
+**Schedule Options**:
+- Daily: `0 0 * * *` (midnight UTC)
+- Weekly: `0 0 * * 0` (Sunday midnight)
+- Twice daily: `0 0,12 * * *` (midnight & noon)
+
+**Vercel Configuration**:
+1. Add CRON_SECRET to environment variables
+2. Deploy vercel.json with cron configuration
+3. Vercel automatically sends x-cron-secret header
+
+#### Logging
+
+All sync operations are logged with:
+- Product processing status
+- Variant counts
+- Errors with context
+- Performance metrics
+
+**Example Log Output**:
+```
+=== Starting Printful Catalog Sync ===
+
+[Sync] Fetching products from Printful...
+[Sync] Fetched 452 products from Printful
+[Sync] Filtered to 45 supported products
+
+[Sync] Processing product: Bella Canvas 3001 T-Shirt (ID: 71)
+[Sync] Product upserted: cmj...
+[Sync] Found 180 variants for product 71
+[Sync] Product 71 complete: 180 variants synced
+
+[Sync] Processing product: Gildan 18500 Hoodie (ID: 146)
+[Sync] Product upserted: cmj...
+[Sync] Found 192 variants for product 146
+[Sync] Product 146 complete: 192 variants synced
+
+=== Sync Complete ===
+Products synced: 45
+Variants synced: 1234
+Products skipped: 407
+Errors: 0
+Duration: 245678ms
+```
+
+#### Performance
+
+**Expected Duration**: 3-5 minutes for full catalog
+- Depends on: number of products, API rate limits, network speed
+- Printful rate limit: 120 req/min (handled automatically)
+- Database operations: bulk upserts for efficiency
+
+**Optimization Tips**:
+- Run during low-traffic hours
+- Monitor rate limit info
+- Check logs for slow products
+- Consider partial syncs for updates
+
+#### Helper Functions
+
+**Location**: `src/lib/printful/products.ts`
+
+```typescript
+// Calculate retail price
+import { calculateRetailPrice } from '@/lib/printful/products';
+const retailPrice = calculateRetailPrice(1150); // 2299 cents ($22.99)
+
+// Parse variant attributes
+import { parseVariantAttributes } from '@/lib/printful/products';
+const { size, color } = parseVariantAttributes("Medium / Black");
+
+// Check if product should be synced
+import { shouldIncludeProduct } from '@/lib/printful/products';
+const include = shouldIncludeProduct(product);
+
+// Map to category
+import { mapProductCategory } from '@/lib/printful/products';
+const category = mapProductCategory(product); // 'apparel'
+
+// Price conversion
+import { parsePriceToCents, formatCentsToDollars } from '@/lib/printful/products';
+const cents = parsePriceToCents("11.50"); // 1150
+const formatted = formatCentsToDollars(2299); // "$22.99"
+```
+
+#### Error Handling
+
+**Common Errors**:
+1. **Network timeout** - Printful API slow/unavailable
+2. **Rate limit** - Too many requests (handled with backoff)
+3. **Invalid data** - Malformed product/variant data
+4. **Database error** - Unique constraint violations, connection issues
+
+**Error Recovery**:
+- Errors logged with full context
+- Product ID and variant ID included
+- Sync continues with remaining products
+- Partial success possible
+
+**Retry Strategy**:
+- Run sync again to catch failed products
+- Upsert logic prevents duplicates
+- Failed products will be retried on next sync
+
+#### Best Practices
+
+1. **Schedule regular syncs**
+   - Daily: Keep catalog up-to-date
+   - Weekly: Reduce API usage
+   - After Printful product launches
+
+2. **Monitor sync results**
+   - Check error count
+   - Verify product count matches expectations
+   - Review skipped products
+
+3. **Test in development**
+   - Use sandbox Printful API token
+   - Verify pricing calculations
+   - Check product filtering logic
+
+4. **Secure the endpoint**
+   - Use strong CRON_SECRET (32+ random chars)
+   - Rotate secret periodically
+   - Never expose secret in client code
+
+5. **Handle failures gracefully**
+   - Errors are expected (network issues, etc.)
+   - Partial syncs are acceptable
+   - Re-run sync to recover
+
+---
+
 ## Printful API Client
 
 GenAI-Merch includes a comprehensive Printful API client for print-on-demand fulfillment operations.

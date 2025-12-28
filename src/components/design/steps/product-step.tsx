@@ -196,12 +196,13 @@ export function ProductStep() {
 
                 {/* Checkbox and Title */}
                 <div className="flex items-start gap-3">
-                  <Checkbox
-                    checked={selected}
-                    onCheckedChange={() => handleToggleProduct(product.id)}
-                    onClick={(e) => e.stopPropagation()}
-                    className="mt-1"
-                  />
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <Checkbox
+                      checked={selected}
+                      onCheckedChange={() => handleToggleProduct(product.id)}
+                      className="mt-1"
+                    />
+                  </div>
                   <div className="flex-1">
                     <CardTitle className="text-base">{product.name}</CardTitle>
                   </div>

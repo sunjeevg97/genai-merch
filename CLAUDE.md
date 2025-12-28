@@ -1691,10 +1691,16 @@ Examples:
 - Automated bulk submission to Printful
 
 ### 4. Product Catalog
+- Browse products page with responsive grid layout
+- Filter by category (apparel, accessories, home-living)
+- Sort by price, featured, newest
+- Server-side rendering with Suspense streaming
+- Empty state with one-click product sync
+- Product cards with images, pricing, badges
+- SEO-optimized with proper meta tags
 - Synced with Printful product catalog
 - Product variants (sizes, colors)
-- Pricing with markup configuration
-- Mockup generation
+- Pricing with markup configuration (2x + .99)
 
 ### 5. Payment Processing
 - Stripe checkout integration
@@ -4004,6 +4010,381 @@ import type {
    - Create orders as drafts
    - Confirm only after Stripe payment success
    - Prevents fulfillment of unpaid orders
+
+---
+
+## Product Catalog Page
+
+The product catalog page displays all products from Printful in a responsive grid layout with filtering and sorting capabilities.
+
+**Location**: `app/products/page.tsx`
+
+### Architecture
+
+**Server Components** (default):
+- `app/products/page.tsx` - Main page component
+- `ProductGrid` - Grid container for products
+- `ProductCard` - Individual product display
+- Fetches data from database server-side
+- Supports streaming with Suspense
+
+**Client Components** (interactive):
+- `ProductFilters` - Category tabs and sort dropdown
+- `EmptyState` - Product sync trigger button
+
+### Page Features
+
+1. **Responsive Grid Layout**
+   - 1 column on mobile
+   - 2 columns on tablet
+   - 3 columns on desktop
+   - 4 columns on large screens
+
+2. **Category Filtering**
+   - All Products
+   - Apparel (t-shirts, hoodies, etc.)
+   - Accessories (hats, bags, etc.)
+   - Home & Living (mugs, etc.)
+   - Shows product count for each category
+
+3. **Sorting Options**
+   - Featured (default - by category, then price)
+   - Price: Low to High
+   - Price: High to Low
+   - Newest
+
+4. **Product Cards Display**
+   - Product image from Printful
+   - Product name
+   - Starting price ("From $22.99")
+   - Product type badge
+   - Variant count
+   - Category color-coded badge
+   - Hover effects with scale animation
+
+5. **Empty State**
+   - Friendly message when no products
+   - One-click product sync button
+   - Calls `/api/printful/sync-catalog`
+   - Shows progress and results
+
+### Component Structure
+
+```
+app/products/
+└── page.tsx                          # Main page (Server Component)
+
+components/products/
+├── product-grid.tsx                  # Grid container
+├── product-card.tsx                  # Individual product card
+├── product-filters.tsx               # Filters (Client Component)
+└── empty-state.tsx                   # Empty state (Client Component)
+
+lib/products/
+└── queries.ts                        # Database queries
+```
+
+### Database Queries
+
+**Location**: `src/lib/products/queries.ts`
+
+#### Get Products
+
+```typescript
+import { getProducts } from '@/lib/products/queries';
+
+const products = await getProducts({
+  category: 'apparel',
+  sort: 'price-asc',
+  minPrice: 1000, // cents
+  maxPrice: 5000, // cents
+  search: 't-shirt',
+});
+```
+
+**Available Filters**:
+- `category`: 'apparel' | 'accessories' | 'home-living' | undefined
+- `sort`: 'featured' | 'price-asc' | 'price-desc' | 'newest'
+- `minPrice`: number (in cents)
+- `maxPrice`: number (in cents)
+- `search`: string (searches name, description, productType)
+
+#### Get Product Counts
+
+```typescript
+import { getProductCounts } from '@/lib/products/queries';
+
+const counts = await getProductCounts();
+// { all: 216, apparel: 180, accessories: 24, 'home-living': 12 }
+```
+
+#### Get Product by ID
+
+```typescript
+import { getProductById } from '@/lib/products/queries';
+
+const product = await getProductById('product-id');
+// Returns product with all variants
+```
+
+#### Get Price Range
+
+```typescript
+import { getPriceRange } from '@/lib/products/queries';
+
+const range = await getPriceRange();
+// { min: 1999, max: 8999 } (in cents)
+```
+
+### URL Query Parameters
+
+The page supports query parameters for filtering and sorting:
+
+```
+/products                              # All products, featured sort
+/products?category=apparel             # Apparel only
+/products?category=accessories&sort=price-asc  # Accessories, low to high
+/products?sort=newest                  # All products, newest first
+```
+
+**Parameters**:
+- `category`: 'apparel' | 'accessories' | 'home-living'
+- `sort`: 'featured' | 'price-asc' | 'price-desc' | 'newest'
+
+Parameters update via `router.push()` with `scroll: false` for smooth filtering.
+
+### Product Card Component
+
+**Features**:
+- Responsive image with aspect ratio preservation
+- Category badge with color coding:
+  - Apparel: Blue
+  - Accessories: Purple
+  - Home & Living: Green
+- Product name (2-line clamp)
+- Description (2-line clamp)
+- Starting price calculation (lowest variant)
+- Variant count display
+- Hover effects:
+  - Card shadow increase
+  - Image scale 1.05x
+  - Title color change to primary
+
+**Code Example**:
+```tsx
+import { ProductCard } from '@/components/products/product-card';
+
+<ProductCard product={product} />
+```
+
+### Product Grid Component
+
+**Features**:
+- Responsive Tailwind grid
+- Gap spacing: 1.5rem (gap-6)
+- Auto-adjusts columns based on screen size
+
+**Code Example**:
+```tsx
+import { ProductGrid } from '@/components/products/product-grid';
+
+<ProductGrid products={products} />
+```
+
+### Product Filters Component
+
+**Features**:
+- Category tabs with counts
+- Sort dropdown
+- Updates URL query params
+- No page reload (client-side navigation)
+- Mobile-responsive layout
+
+**Code Example**:
+```tsx
+import { ProductFilters } from '@/components/products/product-filters';
+
+<ProductFilters counts={{ all: 216, apparel: 180, ... }} />
+```
+
+### Empty State Component
+
+**Features**:
+- Displays when no products in database
+- One-click sync button
+- Calls `/api/printful/sync-catalog`
+- Shows loading spinner during sync
+- Success/error toast notifications
+- Auto-reloads page after successful sync
+
+**Code Example**:
+```tsx
+import { EmptyState } from '@/components/products/empty-state';
+
+{products.length === 0 && <EmptyState />}
+```
+
+### Streaming with Suspense
+
+The page uses React Suspense for streaming:
+
+```tsx
+<Suspense fallback={<ProductGridSkeleton count={12} />}>
+  <ProductsContent category={category} sort={sort} />
+</Suspense>
+```
+
+**Benefits**:
+- Instant page load with skeleton UI
+- Products stream in as they're fetched
+- Better perceived performance
+- No layout shift
+
+**Skeleton Components**:
+- `ProductCardSkeleton` - Animated loading card
+- `ProductGridSkeleton` - Grid of skeletons
+
+### SEO Optimization
+
+**Meta Tags**:
+```typescript
+export const metadata: Metadata = {
+  title: 'Custom Products | GenAI-Merch',
+  description: 'Browse our custom apparel, accessories, and home & living products...',
+  keywords: ['custom t-shirts', 'custom hoodies', ...],
+};
+```
+
+**Benefits**:
+- Better search engine ranking
+- Rich social media previews
+- Improved discoverability
+
+### Navigation
+
+Products are clickable and navigate to detail page:
+
+```
+/products → /products/[productId]
+```
+
+Click handler uses Next.js `Link` component for:
+- Client-side navigation
+- Prefetching on hover
+- Fast page transitions
+
+### Performance Optimizations
+
+1. **Image Optimization**
+   - Next.js Image component
+   - Automatic WebP conversion
+   - Lazy loading
+   - Responsive sizes
+
+2. **Database Queries**
+   - Only fetch first 5 variants per product (catalog view)
+   - Indexed queries (printfulId, category)
+   - Optimized sorting
+
+3. **Streaming**
+   - Suspense boundaries
+   - Progressive rendering
+   - Skeleton UI
+
+4. **Client State**
+   - URL-based filtering (shareable)
+   - No unnecessary re-renders
+   - Smooth transitions with `scroll: false`
+
+### Accessibility
+
+- Semantic HTML (cards, links, buttons)
+- Proper heading hierarchy
+- Alt text for images
+- Keyboard navigation support
+- Focus indicators
+- ARIA labels where needed
+
+### Mobile Responsiveness
+
+**Breakpoints**:
+- Mobile: < 640px (1 column)
+- Tablet: 640px - 1024px (2 columns)
+- Desktop: 1024px - 1280px (3 columns)
+- Large: > 1280px (4 columns)
+
+**Mobile Optimizations**:
+- Stacked filters
+- Abbreviated category labels
+- Touch-friendly card sizes
+- Optimized images
+
+### Testing Checklist
+
+✅ **Page Load**:
+- Products display correctly
+- Skeleton shows while loading
+- No layout shift
+
+✅ **Filtering**:
+- Category tabs work
+- Query params update
+- Product count accurate
+- Empty results handled
+
+✅ **Sorting**:
+- All sort options work
+- Order is correct
+- Query params update
+
+✅ **Responsive**:
+- Mobile layout (1 column)
+- Tablet layout (2 columns)
+- Desktop layout (3-4 columns)
+
+✅ **Cards**:
+- Images load
+- Prices display correctly
+- Badges show category
+- Hover effects work
+- Links navigate correctly
+
+✅ **Empty State**:
+- Shows when no products
+- Sync button works
+- Toast notifications appear
+- Page reloads after sync
+
+### Common Issues
+
+**Issue: Products not showing**
+- Check database has products (`SELECT COUNT(*) FROM "Product"`)
+- Run product sync if empty
+- Verify filters aren't too restrictive
+
+**Issue: Images not loading**
+- Check Printful image URLs are valid
+- Verify Next.js Image config allows Printful domain
+- Check network requests for CORS issues
+
+**Issue: Filters not working**
+- Verify query params in URL
+- Check client component is properly marked (`'use client'`)
+- Verify router.push is being called
+
+**Issue: Slow page load**
+- Check database query performance
+- Verify indexes exist on Product table
+- Consider pagination for large catalogs
+
+### Future Enhancements
+
+- **Pagination**: Add pagination for large catalogs (100+ products)
+- **Search**: Full-text search across product names/descriptions
+- **Price Filter**: Range slider for price filtering
+- **Quick View**: Modal for quick product preview
+- **Favorites**: Save favorite products
+- **Compare**: Compare multiple products side-by-side
 
 ---
 

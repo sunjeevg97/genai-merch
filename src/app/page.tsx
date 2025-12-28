@@ -296,7 +296,7 @@ export default function LandingPage() {
               <CardContent>
                 <p className="text-sm text-muted-foreground">
                   Youth leagues, competitive teams, and recreational clubs use
-                  GenAI-Merch for custom uniforms and team gear.
+                  Regalia for custom uniforms and team gear.
                 </p>
               </CardContent>
             </Card>
@@ -337,7 +337,7 @@ export default function LandingPage() {
             Ready to create your custom apparel?
           </h2>
           <p className="mt-4 text-lg opacity-90">
-            Join thousands of teams and businesses who trust GenAI-Merch for
+            Join thousands of teams and businesses who trust Regalia for
             their custom apparel needs.
           </p>
           <div className="mt-8 flex flex-col justify-center gap-4 sm:flex-row">

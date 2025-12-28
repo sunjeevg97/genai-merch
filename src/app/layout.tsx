@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Navbar } from "@/components/layout/navbar";
-import { Footer } from "@/components/layout/footer";
+import { ConditionalFooter } from "@/components/layout/conditional-footer";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "GenAI-Merch | AI-Powered Custom Apparel",
+  title: "Regalia | AI-Powered Custom Apparel",
   description:
     "Create custom apparel with AI. Generate designs, coordinate group orders, and get high-quality print-on-demand fulfillment. Perfect for teams, businesses, and events.",
   keywords: [
@@ -27,14 +27,14 @@ export const metadata: Metadata = {
     "team merchandise",
     "DALL-E 3",
   ],
-  authors: [{ name: "GenAI-Merch" }],
-  creator: "GenAI-Merch",
+  authors: [{ name: "Regalia" }],
+  creator: "Regalia",
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: "https://genai-merch.com",
-    siteName: "GenAI-Merch",
-    title: "GenAI-Merch | AI-Powered Custom Apparel",
+    url: "https://regalia.com",
+    siteName: "Regalia",
+    title: "Regalia | AI-Powered Custom Apparel",
     description:
       "Create custom apparel with AI. Generate designs, coordinate group orders, and get high-quality print-on-demand fulfillment.",
     images: [
@@ -42,17 +42,17 @@ export const metadata: Metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "GenAI-Merch - AI-Powered Custom Apparel",
+        alt: "Regalia - AI-Powered Custom Apparel",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "GenAI-Merch | AI-Powered Custom Apparel",
+    title: "Regalia | AI-Powered Custom Apparel",
     description:
       "Create custom apparel with AI. Generate designs, coordinate group orders, and get high-quality print-on-demand fulfillment.",
     images: ["/og-image.png"],
-    creator: "@genaimerch",
+    creator: "@regalia",
   },
   robots: {
     index: true,
@@ -79,7 +79,7 @@ export default function RootLayout({
       >
         <Navbar />
         <main>{children}</main>
-        <Footer />
+        <ConditionalFooter />
       </body>
     </html>
   );

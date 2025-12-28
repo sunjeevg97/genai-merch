@@ -7,10 +7,10 @@
 import { createBrowserClient } from './client';
 
 // Constants
-const DESIGNS_BUCKET = 'design-assets';
+const DESIGNS_BUCKET = 'designs';
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB in bytes
-const ALLOWED_MIME_TYPES = ['image/png', 'image/jpeg', 'image/jpg'];
-const ALLOWED_EXTENSIONS = ['.png', '.jpg', '.jpeg'];
+const ALLOWED_MIME_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml'];
+const ALLOWED_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.svg'];
 
 // Types
 export interface UploadResult {
@@ -107,7 +107,7 @@ export function validateFile(file: File): ValidationResult {
   if (!validateFileType(file)) {
     return {
       isValid: false,
-      error: `Invalid file type. Only PNG and JPG files are allowed.`,
+      error: `Invalid file type. Only PNG, JPG, and SVG files are allowed.`,
     };
   }
 

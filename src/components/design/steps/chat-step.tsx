@@ -62,11 +62,32 @@ export function ChatStep() {
   /**
    * Handle design generation from chat
    */
-  const handleDesignGenerated = (imageUrl: string) => {
-    // Find the last message from the chat to get the prompt
-    // This will be handled by the parent component
-    // For now, we'll just show a success message
-    toast.success('Design added to gallery!');
+  const handleDesignGenerated = (imageUrl: string, prompt: string) => {
+    console.log('[Chat Step] Design generated:', { imageUrl, prompt });
+
+    // Create design object
+    const designId = Date.now().toString();
+    const newDesign = {
+      id: designId,
+      imageUrl,
+      prompt,
+      createdAt: new Date(),
+      isFavorite: false,
+    };
+
+    // Add to Zustand store
+    addGeneratedDesign(newDesign);
+
+    // Automatically select the newly generated design
+    selectDesign(designId);
+    setFinalDesign(imageUrl);
+
+    console.log('[Chat Step] Auto-selected newly generated design:', {
+      designId,
+      imageUrl,
+    });
+
+    toast.success('Design generated and selected!');
   };
 
   /**
@@ -130,17 +151,7 @@ export function ChatStep() {
             eventType={eventType}
             products={selectedProducts}
             brandAssets={brandAssets}
-            onDesignGenerated={(imageUrl, prompt) => {
-              // Add the generated design to the store
-              const newDesign = {
-                id: Date.now().toString(),
-                imageUrl,
-                prompt,
-                createdAt: new Date(),
-              };
-              addGeneratedDesign(newDesign);
-              handleDesignGenerated(imageUrl);
-            }}
+            onDesignGenerated={handleDesignGenerated}
           />
         </div>
 

@@ -1842,7 +1842,7 @@ GenAI-Merch uses PostgreSQL (via Supabase) with Prisma ORM for type-safe databas
 
 **User** - User accounts (synced with Supabase Auth)
 - `id`, `email`, `name`
-- Relations: organizations, designs, orders, groupOrders
+- Relations: organizations, designs, orders, groupOrders, carts, addresses
 
 **Organization** - Team/company accounts
 - `id`, `name`, `slug`
@@ -1855,23 +1855,116 @@ GenAI-Merch uses PostgreSQL (via Supabase) with Prisma ORM for type-safe databas
 **Design** - Custom apparel designs
 - `name`, `imageUrl`, `vectorUrl`, `metadata` (JSON)
 - `aiPrompt` (if AI-generated)
-- Relations: user, orders
+- Relations: user, cartItems, orderItems
 
-**Order** - Individual product orders
-- `productType`, `size`, `quantity`, `price`
-- `status`: pending → processing → shipped → delivered
-- `stripeSessionId`, `printfulOrderId`
-- `shippingAddress` (JSON)
-- Relations: user, design, groupOrder
+**OrganizationMember** - User-Organization relationships
+- `role`: member, admin, owner
+- Unique constraint on (userId, organizationId)
 
 **GroupOrder** - Team/event bulk orders
 - `name`, `slug`, `deadline`
 - `status`: open → closed → processing
 - Relations: createdBy (user), orders
 
-**OrganizationMember** - User-Organization relationships
-- `role`: member, admin, owner
-- Unique constraint on (userId, organizationId)
+---
+
+#### E-commerce Models
+
+**Product** - Product catalog synced from Printful API
+- `printfulId` (unique), `name`, `description`
+- `category`: apparel, accessories, home-living
+- `productType`: t-shirt, hoodie, mug, etc.
+- `basePrice` (cents), `currency` (USD)
+- `imageUrl`, `mockupUrl`
+- `active` (boolean), `metadata` (JSON - Printful data)
+- Relations: variants
+- **Indexes**: printfulId, category, productType, active
+
+**ProductVariant** - Size/color variants with pricing
+- `printfulVariantId` (unique), `name` (e.g., "Medium / Black")
+- `size`, `color`, `price` (cents), `inStock`
+- `imageUrl`, `metadata` (JSON - Printful data)
+- Relations: product, cartItems, orderItems
+- **Indexes**: printfulVariantId, productId
+
+**Cart** - Shopping cart (authenticated or guest)
+- `userId` (optional for guests), `sessionId` (for guests)
+- `expiresAt` (for guest cart cleanup)
+- Relations: user, items
+- **Indexes**: userId, sessionId
+
+**CartItem** - Items in shopping cart
+- `productVariantId`, `designId` (optional)
+- `customizationData` (JSON - design URL, placement, preview)
+- `quantity`, `unitPrice` (cents, frozen at add-to-cart time)
+- Relations: cart, productVariant, design
+- **Indexes**: cartId
+
+**Order** - Customer orders (comprehensive e-commerce version)
+- `orderNumber` (unique, e.g., "ORD-20240101-ABCD")
+- `status`: PENDING_PAYMENT → PAID → SUBMITTED_TO_POD → IN_PRODUCTION → SHIPPED → DELIVERED (or CANCELLED/REFUNDED)
+- **Stripe Integration**: `stripePaymentIntentId`, `stripeCheckoutSessionId`
+- **Printful Integration**: `printfulOrderId`, `printfulStatus`
+- **Pricing** (all in cents): `subtotal`, `shipping`, `tax`, `total`
+- `currency` (default USD)
+- **Shipping**: `shippingAddressId`, `trackingNumber`, `trackingUrl`, `carrier`
+- **Timestamps**: `createdAt`, `paidAt`, `shippedAt`, `deliveredAt`
+- `metadata` (JSON - additional order data)
+- Relations: user, groupOrder, shippingAddress, items, statusHistory
+- **Indexes**: userId, status, printfulOrderId, orderNumber
+
+**OrderItem** - Frozen snapshot of order line items
+- `productVariantId`, `designId` (optional)
+- `productName`, `variantName` (frozen from time of order)
+- `customizationData` (JSON - design URL, placement)
+- `quantity`, `unitPrice` (cents)
+- `thumbnailUrl`, `printfulItemId`
+- Relations: order, productVariant, design
+- **Indexes**: orderId
+
+**Address** - Shipping addresses
+- `userId` (optional - can be guest), `name`, `email`, `phone`
+- `address1`, `address2`, `city`, `stateCode`, `countryCode`, `zip`
+- `isDefault` (boolean)
+- Relations: user, orders
+- **Indexes**: userId
+
+**OrderStatusHistory** - Audit trail for order status changes
+- `orderId`, `fromStatus` (null for initial), `toStatus`
+- `changedBy`: "system", "webhook:stripe", "webhook:printful", "admin:userId"
+- `reason` (optional explanation)
+- `createdAt`
+- Relations: order
+- **Indexes**: orderId, createdAt
+
+---
+
+#### Data Flow
+
+**Shopping Cart Flow:**
+1. User selects ProductVariant from Product catalog
+2. Adds to Cart (with optional Design customization)
+3. CartItem created with frozen `unitPrice`
+4. Cart can be saved for authenticated users or expires for guests
+
+**Order Creation Flow:**
+1. User checks out from Cart
+2. Order created with unique `orderNumber`
+3. CartItems converted to OrderItems (frozen snapshots)
+4. Stripe Checkout Session created
+5. Status: PENDING_PAYMENT
+
+**Payment & Fulfillment Flow:**
+1. Stripe webhook confirms payment → Status: PAID
+2. Order submitted to Printful API → Status: SUBMITTED_TO_POD
+3. Printful webhook: production started → Status: IN_PRODUCTION
+4. Printful webhook: shipped → Status: SHIPPED (+ tracking info)
+5. Printful webhook: delivered → Status: DELIVERED
+
+**Status History:**
+- Every status change logged in OrderStatusHistory
+- Tracks who/what triggered the change (user, webhook, system)
+- Provides audit trail for customer service
 
 ### Using Prisma Client
 

@@ -4,6 +4,8 @@
  * Displays a single product in the catalog grid.
  */
 
+'use client';
+
 import Link from 'next/link';
 import Image from 'next/image';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
@@ -75,6 +77,10 @@ export function ProductCard({ product }: ProductCardProps) {
                 fill
                 className="object-cover transition-transform group-hover:scale-105"
                 sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                onError={(e) => {
+                  console.error('Failed to load image:', product.imageUrl);
+                  console.error('Product:', product.name);
+                }}
               />
             ) : (
               <div className="flex h-full items-center justify-center text-gray-400">

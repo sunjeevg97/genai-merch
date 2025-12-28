@@ -3165,6 +3165,494 @@ All generation requests are logged with:
 
 ---
 
+## Printful API Client
+
+GenAI-Merch includes a comprehensive Printful API client for print-on-demand fulfillment operations.
+
+**Location**: `src/lib/printful/client.ts`
+**Types**: `src/lib/printful/types.ts`
+
+### Overview
+
+The PrintfulClient class handles all interactions with the Printful API:
+- Product catalog management
+- Mockup generation with custom designs
+- Order creation and fulfillment
+- Shipping rate calculation
+- Rate limiting (120 requests per minute)
+- Exponential backoff on rate limit errors
+- Comprehensive error handling and logging
+
+### Setup
+
+```typescript
+import { printful } from '@/lib/printful/client';
+// OR
+import { getPrintfulClient } from '@/lib/printful/client';
+const printful = getPrintfulClient();
+```
+
+The client automatically uses the `PRINTFUL_API_TOKEN` environment variable.
+
+### Product Catalog Methods
+
+#### Get All Products
+
+```typescript
+const products = await printful.getProducts();
+console.log(`Found ${products.length} products`);
+
+// Filter by category
+const apparelProducts = await printful.getProducts(categoryId);
+```
+
+**Returns**: Array of `PrintfulProduct` objects with:
+- `id`, `type`, `title`, `brand`, `model`
+- `variant_count`, `image`, `description`
+- `avg_fulfillment_time`, `techniques`, `files`, `options`
+
+#### Get Single Product
+
+```typescript
+const product = await printful.getProduct(71); // Bella Canvas 3001
+console.log(product.title); // "Bella + Canvas 3001 Unisex Short Sleeve Jersey T-Shirt with Tear Away Label"
+console.log(product.variant_count); // 180+ variants (sizes & colors)
+```
+
+#### Get Product Variants
+
+```typescript
+const variants = await printful.getProductVariants(71);
+
+// Find specific variant
+const blackMedium = variants.find(
+  v => v.size === 'M' && v.color === 'Black'
+);
+
+console.log(blackMedium.id); // 4012
+console.log(blackMedium.price); // "11.50"
+console.log(blackMedium.in_stock); // true
+```
+
+**Variant Properties**:
+- `id`, `product_id`, `name`, `size`, `color`, `color_code`
+- `image`, `price`, `in_stock`
+- `availability_regions`, `availability_status`
+
+#### Get Single Variant
+
+```typescript
+const variant = await printful.getVariant(4012);
+console.log(variant.price); // Current price
+console.log(variant.in_stock); // Availability
+```
+
+### Mockup Generation
+
+#### Create Mockup Task
+
+Generate product mockups with your custom design applied.
+
+```typescript
+const taskKey = await printful.createMockup({
+  variant_ids: [4012, 4013], // Black M, Black L
+  format: 'png',
+  files: [{
+    placement: 'front',
+    image_url: 'https://example.com/design.png',
+    position: {
+      area_width: 1800,
+      area_height: 2400,
+      width: 1800,
+      height: 1800,
+      top: 300,
+      left: 0
+    }
+  }]
+});
+
+console.log('Mockup task created:', taskKey);
+```
+
+#### Check Mockup Status
+
+```typescript
+const task = await printful.getMockupTaskStatus(taskKey);
+
+if (task.status === 'completed') {
+  console.log('Mockups ready:');
+  task.mockups?.forEach(mockup => {
+    console.log(`- ${mockup.placement}: ${mockup.mockup_url}`);
+  });
+} else if (task.status === 'failed') {
+  console.error('Mockup generation failed:', task.error);
+} else {
+  console.log('Mockup generation in progress...');
+}
+```
+
+**Status Values**: `pending`, `completed`, `failed`
+
+### Order Management
+
+#### Create Order
+
+```typescript
+const order = await printful.createOrder({
+  recipient: {
+    name: 'John Doe',
+    address1: '123 Main St',
+    city: 'Los Angeles',
+    state_code: 'CA',
+    country_code: 'US',
+    zip: '90001',
+    email: 'john@example.com',
+    phone: '555-0123'
+  },
+  items: [{
+    variant_id: 4012, // Black M
+    quantity: 2,
+    files: [{
+      url: 'https://example.com/design.png'
+    }],
+    retail_price: '29.99'
+  }],
+  retail_costs: {
+    currency: 'USD',
+    subtotal: '59.98',
+    shipping: '5.99',
+    tax: '4.50'
+  }
+});
+
+console.log('Order created:', order.id);
+console.log('Status:', order.status); // 'draft'
+```
+
+**Orders are created as drafts** and must be confirmed separately.
+
+#### Confirm Draft Order
+
+```typescript
+const confirmedOrder = await printful.confirmOrder(order.id);
+console.log('Order confirmed:', confirmedOrder.status); // 'pending'
+```
+
+#### Get Order Details
+
+```typescript
+// By Printful order ID
+const order = await printful.getOrder(12345);
+
+// By your external order ID
+const order = await printful.getOrder('@order-abc-123');
+
+console.log('Status:', order.status);
+console.log('Shipments:', order.shipments);
+console.log('Tracking:', order.shipments[0]?.tracking_url);
+```
+
+**Order Statuses**:
+- `draft` - Order created, not confirmed
+- `pending` - Confirmed, awaiting fulfillment
+- `failed` - Fulfillment failed
+- `canceled` - Order canceled
+- `onhold` - On hold (payment/address issue)
+- `inprocess` - Being fulfilled
+- `partial` - Partially fulfilled
+- `fulfilled` - Completely fulfilled
+
+#### Cancel Order
+
+```typescript
+const canceledOrder = await printful.cancelOrder(12345);
+console.log('Order canceled:', canceledOrder.status); // 'canceled'
+```
+
+**Note**: Only `draft` and `pending` orders can be canceled.
+
+#### List Orders
+
+```typescript
+// Get all orders
+const allOrders = await printful.getOrders();
+
+// Filter by status
+const pendingOrders = await printful.getOrders('pending');
+const fulfilledOrders = await printful.getOrders('fulfilled');
+
+// Pagination
+const page2 = await printful.getOrders(undefined, 20, 20); // offset 20, limit 20
+```
+
+### Shipping Rates
+
+Calculate shipping costs before order creation:
+
+```typescript
+const rates = await printful.getShippingRates({
+  recipient: {
+    address1: '123 Main St',
+    city: 'Los Angeles',
+    state_code: 'CA',
+    country_code: 'US',
+    zip: '90001'
+  },
+  items: [
+    { variant_id: 4012, quantity: 2 },
+    { variant_id: 4013, quantity: 1 }
+  ],
+  currency: 'USD'
+});
+
+rates.forEach(rate => {
+  console.log(`${rate.name}: $${rate.rate}`);
+  console.log(`  Delivery: ${rate.minDeliveryDays}-${rate.maxDeliveryDays} days`);
+});
+```
+
+**Example Output**:
+```
+STANDARD: $4.99
+  Delivery: 7-10 days
+EXPEDITED: $9.99
+  Delivery: 3-5 days
+EXPRESS: $19.99
+  Delivery: 1-2 days
+```
+
+### Error Handling
+
+All methods throw `PrintfulError` on failure:
+
+```typescript
+import { PrintfulError } from '@/lib/printful/types';
+
+try {
+  const order = await printful.createOrder(orderData);
+} catch (error) {
+  if (error instanceof PrintfulError) {
+    console.error('Printful error:', {
+      statusCode: error.statusCode, // HTTP status (400, 429, 500, etc.)
+      code: error.code,              // Printful error code
+      message: error.message,        // Error description
+      reason: error.reason           // Additional details
+    });
+
+    // Handle specific errors
+    if (error.statusCode === 429) {
+      // Rate limit exceeded - client will auto-retry
+      console.log('Rate limit hit, request will be retried');
+    } else if (error.statusCode === 401) {
+      // Invalid API token
+      console.error('Check PRINTFUL_API_TOKEN environment variable');
+    } else if (error.code === 400) {
+      // Bad request - check order data
+      console.error('Invalid request:', error.message);
+    }
+  }
+}
+```
+
+### Rate Limiting
+
+The client automatically handles Printful's rate limit (120 requests per minute):
+
+- Uses `bottleneck` package for queue management
+- Exponential backoff on 429 errors
+- Automatic retry with increasing delays
+- Rate limit info available via `getRateLimitInfo()`
+
+```typescript
+const rateLimitInfo = printful.getRateLimitInfo();
+console.log(`Remaining: ${rateLimitInfo?.remaining}/${rateLimitInfo?.limit}`);
+console.log(`Resets at: ${new Date(rateLimitInfo?.reset * 1000)}`);
+```
+
+**Bottleneck Configuration**:
+- Reservoir: 120 requests
+- Refresh interval: 60 seconds
+- Max concurrent: 10 requests
+- Min time between requests: 500ms
+- Auto-retry on 429 with exponential backoff
+
+### Logging
+
+All API calls are automatically logged:
+
+```
+[Printful] GET /products {}
+[Printful] Success GET /products {
+  status: 200,
+  duration: '847ms',
+  rateLimit: { limit: 120, remaining: 119, reset: 60 }
+}
+```
+
+**Log Entries Include**:
+- HTTP method and endpoint
+- Request body (for POST/PUT)
+- Response status
+- Duration in milliseconds
+- Current rate limit info
+- Error details (on failure)
+
+### Testing Connection
+
+Verify API token is valid:
+
+```typescript
+try {
+  const isConnected = await printful.testConnection();
+  console.log('Printful API connected:', isConnected);
+} catch (error) {
+  console.error('Connection failed - check PRINTFUL_API_TOKEN');
+}
+```
+
+### Complete Example: Product to Order Flow
+
+```typescript
+import { printful } from '@/lib/printful/client';
+
+async function createCustomOrder() {
+  // 1. Get product variants
+  const variants = await printful.getProductVariants(71);
+  const blackMedium = variants.find(v => v.size === 'M' && v.color === 'Black');
+
+  // 2. Generate mockup
+  const taskKey = await printful.createMockup({
+    variant_ids: [blackMedium.id],
+    files: [{
+      placement: 'front',
+      image_url: 'https://mysite.com/design.png'
+    }]
+  });
+
+  // 3. Wait for mockup
+  let task;
+  do {
+    task = await printful.getMockupTaskStatus(taskKey);
+    if (task.status === 'pending') {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+  } while (task.status === 'pending');
+
+  // 4. Get shipping rates
+  const rates = await printful.getShippingRates({
+    recipient: {
+      address1: '123 Main St',
+      city: 'Los Angeles',
+      state_code: 'CA',
+      country_code: 'US',
+      zip: '90001'
+    },
+    items: [{ variant_id: blackMedium.id, quantity: 1 }]
+  });
+
+  const standardShipping = rates.find(r => r.id === 'STANDARD');
+
+  // 5. Create order
+  const order = await printful.createOrder({
+    recipient: {
+      name: 'John Doe',
+      address1: '123 Main St',
+      city: 'Los Angeles',
+      state_code: 'CA',
+      country_code: 'US',
+      zip: '90001'
+    },
+    items: [{
+      variant_id: blackMedium.id,
+      quantity: 1,
+      files: [{ url: 'https://mysite.com/design.png' }],
+      retail_price: '29.99'
+    }],
+    retail_costs: {
+      currency: 'USD',
+      subtotal: '29.99',
+      shipping: standardShipping.rate
+    }
+  });
+
+  // 6. Confirm order
+  const confirmed = await printful.confirmOrder(order.id);
+
+  console.log('Order confirmed:', confirmed.id);
+  console.log('Dashboard:', confirmed.dashboard_url);
+
+  return confirmed;
+}
+```
+
+### TypeScript Types
+
+All Printful API types are fully typed in `@/lib/printful/types`:
+
+```typescript
+import type {
+  PrintfulProduct,
+  PrintfulProductVariant,
+  PrintfulOrder,
+  PrintfulOrderRequest,
+  PrintfulMockupRequest,
+  PrintfulShippingRate,
+  PrintfulError
+} from '@/lib/printful/types';
+```
+
+**Key Types**:
+- `PrintfulProduct` - Product catalog item
+- `PrintfulProductVariant` - Size/color variant
+- `PrintfulOrder` - Order details
+- `PrintfulOrderRequest` - Order creation payload
+- `PrintfulOrderItem` - Line item in order
+- `PrintfulRecipient` - Shipping address
+- `PrintfulMockupRequest` - Mockup generation request
+- `PrintfulMockupTask` - Mockup generation status
+- `PrintfulShippingRate` - Shipping option
+- `PrintfulError` - Custom error class
+
+### Best Practices
+
+1. **Always use the singleton instance**
+   ```typescript
+   import { printful } from '@/lib/printful/client';
+   // NOT: new PrintfulClient()
+   ```
+
+2. **Handle errors gracefully**
+   - Wrap all calls in try-catch
+   - Check for PrintfulError instance
+   - Show user-friendly messages
+
+3. **Respect rate limits**
+   - Client handles this automatically
+   - Check `getRateLimitInfo()` if needed
+   - Don't create multiple client instances
+
+4. **Use external IDs for orders**
+   - Set your order ID in order metadata
+   - Query by external ID: `@your-order-id`
+   - Easier reconciliation with your database
+
+5. **Test in sandbox mode**
+   - Use Printful sandbox API token for development
+   - Sandbox orders are free and not fulfilled
+   - Switch to production token for live orders
+
+6. **Store mockup URLs**
+   - Mockup generation takes 3-10 seconds
+   - Save mockup URLs to your database
+   - Don't regenerate on every page load
+
+7. **Confirm orders after payment**
+   - Create orders as drafts
+   - Confirm only after Stripe payment success
+   - Prevents fulfillment of unpaid orders
+
+---
+
 ## Environment Variables
 
 Required environment variables (never commit actual values):

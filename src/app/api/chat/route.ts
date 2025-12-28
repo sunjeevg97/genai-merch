@@ -15,10 +15,16 @@ import { buildChatSystemPrompt, type DesignContext } from '@/lib/ai/prompts';
 import { getUser } from '@/lib/supabase/server';
 import type { EventType } from '@/lib/store/design-wizard';
 
-// Initialize OpenAI provider
-const openai = createOpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+/**
+ * Get OpenAI provider (lazy initialization to avoid build-time errors)
+ */
+function getOpenAIProvider() {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error('OPENAI_API_KEY is not configured');
+  }
+  return createOpenAI({ apiKey });
+}
 
 /**
  * Rate Limiting
@@ -179,6 +185,7 @@ export async function POST(request: NextRequest) {
     });
 
     // 8. Stream text with OpenAI using Vercel AI SDK
+    const openai = getOpenAIProvider();
     const result = streamText({
       model: openai('gpt-4o'), // Using GPT-4 Omni model
       system: systemPrompt,

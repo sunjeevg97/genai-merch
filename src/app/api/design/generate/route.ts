@@ -10,10 +10,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+/**
+ * Get OpenAI client (lazy initialization to avoid build-time errors)
+ */
+function getOpenAIClient() {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error('OPENAI_API_KEY is not configured');
+  }
+  return new OpenAI({ apiKey });
+}
 
 /**
  * Request body interface
@@ -64,6 +70,9 @@ export async function POST(request: NextRequest) {
     enhancedPrompt += `\nCreate a design suitable for custom apparel/merchandise. The design should be clear, bold, and work well on clothing. Use a transparent or simple background.`;
 
     console.log('Generating design with prompt:', enhancedPrompt);
+
+    // Get OpenAI client
+    const openai = getOpenAIClient();
 
     // Generate image with DALL-E 3
     const response = await openai.images.generate({

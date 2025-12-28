@@ -17,10 +17,16 @@ import { getUser } from '@/lib/supabase/server';
 import { uploadGeneratedDesign } from '@/lib/supabase/storage-server';
 import type { EventType } from '@/lib/store/design-wizard';
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+/**
+ * Get OpenAI client (lazy initialization to avoid build-time errors)
+ */
+function getOpenAIClient() {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error('OPENAI_API_KEY is not configured');
+  }
+  return new OpenAI({ apiKey });
+}
 
 /**
  * Rate Limiting
@@ -167,6 +173,9 @@ export async function POST(request: NextRequest) {
     console.log('[Generate Design] Step 1: Refining prompt with GPT-4...');
 
     const optimizedPrompt = buildImageGenerationPrompt(prompt, context);
+
+    // Get OpenAI client
+    const openai = getOpenAIClient();
 
     const gpt4Response = await openai.chat.completions.create({
       model: 'gpt-4o-mini', // Using mini for cost efficiency

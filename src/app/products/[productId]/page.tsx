@@ -11,15 +11,18 @@ import { use } from 'react';
 import { notFound, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowLeft, Package, Info } from 'lucide-react';
+import { ArrowLeft, Package, Info, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { VariantSelector } from '@/components/products/variant-selector';
 import { AddToCartForm } from '@/components/products/add-to-cart-form';
 import { DesignPreview, type DesignData } from '@/components/products/design-preview';
+import { MockupPreview } from '@/components/products/mockup-preview';
 import type { ProductVariant } from '@prisma/client';
+import type { MockupPlacement } from '@/lib/printful/mockups';
 
 interface ProductDetailPageProps {
   params: Promise<{
@@ -62,6 +65,8 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
   const [design, setDesign] = useState<DesignData | null>(null);
+  const [viewMode, setViewMode] = useState<'product' | 'mockup'>('product');
+  const [placement, setPlacement] = useState<MockupPlacement>('front');
 
   // Fetch product data
   useEffect(() => {
@@ -103,6 +108,13 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
     }
   }, [searchParams]);
 
+  // Auto-switch to mockup view when design is selected
+  useEffect(() => {
+    if (design && selectedVariant) {
+      setViewMode('mockup');
+    }
+  }, [design, selectedVariant]);
+
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -136,35 +148,75 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
 
       {/* Product Layout */}
       <div className="grid gap-8 lg:grid-cols-2">
-        {/* Left: Product Image */}
+        {/* Left: Product Image/Mockup */}
         <div className="space-y-4">
-          <Card className="overflow-hidden">
-            <div className="relative aspect-square bg-gray-100">
-              {displayImage ? (
-                <Image
-                  src={displayImage}
-                  alt={product.name}
-                  fill
-                  className="object-cover"
-                  priority
-                  onError={(e) => {
-                    console.error('Failed to load image:', displayImage);
-                  }}
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center text-gray-400">
-                  <Package className="h-24 w-24" />
-                </div>
-              )}
-
-              {/* Category Badge */}
-              <div className="absolute left-4 top-4">
-                <Badge className={getCategoryColor(product.category)}>
-                  {formatProductType(product.productType)}
-                </Badge>
-              </div>
+          {/* View Mode Toggle */}
+          {design && selectedVariant && (
+            <div className="flex items-center justify-between">
+              <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'product' | 'mockup')}>
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="product">Product View</TabsTrigger>
+                  <TabsTrigger value="mockup">
+                    <Eye className="mr-2 h-4 w-4" />
+                    Mockup Preview
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
             </div>
-          </Card>
+          )}
+
+          {/* Placement Selector (for mockup view with design) */}
+          {viewMode === 'mockup' && design && product.productType.includes('shirt') && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">Placement:</span>
+              <Tabs value={placement} onValueChange={(v) => setPlacement(v as MockupPlacement)}>
+                <TabsList>
+                  <TabsTrigger value="front">Front</TabsTrigger>
+                  <TabsTrigger value="back">Back</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+          )}
+
+          {/* Image Display */}
+          {viewMode === 'mockup' && design ? (
+            <MockupPreview
+              productVariantId={selectedVariant?.id || null}
+              designUrl={design.imageUrl}
+              productImageUrl={product.imageUrl}
+              productType={product.productType}
+              placement={placement}
+              onPlacementChange={setPlacement}
+            />
+          ) : (
+            <Card className="overflow-hidden">
+              <div className="relative aspect-square bg-gray-100">
+                {displayImage ? (
+                  <Image
+                    src={displayImage}
+                    alt={product.name}
+                    fill
+                    className="object-cover"
+                    priority
+                    onError={(e) => {
+                      console.error('Failed to load image:', displayImage);
+                    }}
+                  />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-gray-400">
+                    <Package className="h-24 w-24" />
+                  </div>
+                )}
+
+                {/* Category Badge */}
+                <div className="absolute left-4 top-4">
+                  <Badge className={getCategoryColor(product.category)}>
+                    {formatProductType(product.productType)}
+                  </Badge>
+                </div>
+              </div>
+            </Card>
+          )}
 
           {/* Product Info Card (Mobile Only) */}
           <Card className="lg:hidden">

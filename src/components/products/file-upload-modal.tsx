@@ -58,9 +58,8 @@ export function FileUploadModal({
     accept: {
       'image/png': ['.png'],
       'image/jpeg': ['.jpg', '.jpeg'],
-      'image/svg+xml': ['.svg'],
     },
-    maxSize: 10 * 1024 * 1024, // 10MB
+    maxSize: 5 * 1024 * 1024, // 5MB (match API limit)
     multiple: false,
     maxFiles: 1,
   });
@@ -82,6 +81,13 @@ export function FileUploadModal({
 
     try {
       // Step 1: Upload file to storage (0-70%)
+      console.log('[Upload Modal] Starting upload:', {
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type,
+        designName: designName.trim(),
+      });
+
       const formData = new FormData();
       formData.append('file', file);
 
@@ -94,32 +100,41 @@ export function FileUploadModal({
 
       if (!uploadResponse.ok) {
         const error = await uploadResponse.json();
+        console.error('[Upload Modal] Upload failed:', error);
         throw new Error(error.error || 'Upload failed');
       }
 
       const uploadResult = await uploadResponse.json();
+      console.log('[Upload Modal] Upload successful:', uploadResult);
       setUploadProgress(70);
 
       // Step 2: Save design to database (70-100%)
+      const savePayload = {
+        name: designName.trim(),
+        imageUrl: uploadResult.data.publicUrl,
+        metadata: {
+          fileName: uploadResult.data.fileName,
+          fileSize: uploadResult.data.fileSize,
+          filePath: uploadResult.data.filePath,
+        },
+      };
+
+      console.log('[Upload Modal] Saving to database:', savePayload);
+
       const saveResponse = await fetch('/api/designs/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: designName.trim(),
-          imageUrl: uploadResult.data.publicUrl,
-          metadata: {
-            fileName: uploadResult.data.fileName,
-            fileSize: uploadResult.data.fileSize,
-            filePath: uploadResult.data.filePath,
-          },
-        }),
+        body: JSON.stringify(savePayload),
       });
 
       if (!saveResponse.ok) {
-        throw new Error('Failed to save design');
+        const saveError = await saveResponse.json();
+        console.error('[Upload Modal] Save failed:', saveError);
+        throw new Error(saveError.error || saveError.message || 'Failed to save design');
       }
 
       const saveResult = await saveResponse.json();
+      console.log('[Upload Modal] Save successful:', saveResult);
       setUploadProgress(100);
       setUploadStatus('success');
 
@@ -170,7 +185,7 @@ export function FileUploadModal({
         <DialogHeader>
           <DialogTitle>Upload Custom Design</DialogTitle>
           <DialogDescription>
-            Upload your own design file (PNG, JPG, or SVG)
+            Upload your own design file (PNG or JPG, max 5MB)
           </DialogDescription>
         </DialogHeader>
 
@@ -203,7 +218,7 @@ export function FileUploadModal({
                       or click to browse files
                     </p>
                     <p className="text-xs text-gray-500">
-                      Supports PNG, JPG, SVG (max 10MB)
+                      Supports PNG, JPG (max 5MB)
                     </p>
                   </>
                 )}

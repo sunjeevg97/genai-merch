@@ -251,6 +251,17 @@ export async function POST(request: NextRequest) {
 
         const { prisma } = await import('@/lib/prisma');
 
+        // Ensure user exists in database
+        await prisma.user.upsert({
+          where: { id: user.id },
+          update: {},
+          create: {
+            id: user.id,
+            email: user.email || '',
+            name: user.user_metadata?.name || user.email?.split('@')[0] || 'User',
+          },
+        });
+
         savedDesign = await prisma.design.create({
           data: {
             userId: user.id,

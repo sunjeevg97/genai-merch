@@ -129,7 +129,8 @@ export function FileUploadModal({
 
       if (!saveResponse.ok) {
         const saveError = await saveResponse.json();
-        console.error('[Upload Modal] Save failed:', saveError);
+        console.error('[Upload Modal] Save failed - Status:', saveResponse.status);
+        console.error('[Upload Modal] Save error details:', JSON.stringify(saveError, null, 2));
         throw new Error(saveError.error || saveError.message || 'Failed to save design');
       }
 

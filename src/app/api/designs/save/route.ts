@@ -59,7 +59,27 @@ export async function POST(request: NextRequest) {
 
     const { name, imageUrl, vectorUrl, metadata, aiPrompt } = validation.data;
 
-    // 3. Create design record in database
+    console.log('[Design Save] Creating design with data:', {
+      userId: user.id,
+      name,
+      imageUrl,
+      vectorUrl,
+      metadata,
+      aiPrompt,
+    });
+
+    // 3. Ensure user exists in database (create if doesn't exist)
+    await prisma.user.upsert({
+      where: { id: user.id },
+      update: {},
+      create: {
+        id: user.id,
+        email: user.email || '',
+        name: user.user_metadata?.name || user.email?.split('@')[0] || 'User',
+      },
+    });
+
+    // 4. Create design record in database
     const design = await prisma.design.create({
       data: {
         userId: user.id,
@@ -71,7 +91,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    console.log('[Design Save] Design saved:', {
+    console.log('[Design Save] Design saved successfully:', {
       id: design.id,
       userId: user.id,
       name: design.name,
@@ -84,8 +104,18 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('[Design Save] Error:', error);
+
+    // Log detailed error information
+    if (error instanceof Error) {
+      console.error('[Design Save] Error message:', error.message);
+      console.error('[Design Save] Error stack:', error.stack);
+    }
+
     return NextResponse.json(
-      { error: 'Failed to save design' },
+      {
+        error: 'Failed to save design',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      },
       { status: 500 }
     );
   }

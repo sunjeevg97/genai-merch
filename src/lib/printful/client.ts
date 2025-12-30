@@ -41,11 +41,12 @@ export class PrintfulClient {
   private rateLimitInfo: PrintfulRateLimitInfo | null = null;
 
   constructor(apiToken?: string) {
-    this.apiToken = apiToken || process.env.PRINTFUL_API_TOKEN || '';
+    // Support both PRINTFUL_API_KEY (newer) and PRINTFUL_API_TOKEN (legacy)
+    this.apiToken = apiToken || process.env.PRINTFUL_API_KEY || process.env.PRINTFUL_API_TOKEN || '';
 
     if (!this.apiToken) {
       throw new Error(
-        'Printful API token is required. Set PRINTFUL_API_TOKEN environment variable.'
+        'Printful API token is required. Set PRINTFUL_API_KEY environment variable.'
       );
     }
 

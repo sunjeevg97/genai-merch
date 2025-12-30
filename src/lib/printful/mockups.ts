@@ -83,7 +83,9 @@ class PrintfulMockupClient {
    * Create mockup generation task
    */
   async createMockupTask(request: MockupRequest): Promise<string> {
-    const response = await fetch(`${this.baseUrl}/mockup-generator/create-task/433`, {
+    console.log('[Printful Mockup] Creating task with request:', JSON.stringify(request, null, 2));
+
+    const response = await fetch(`${this.baseUrl}/mockup-generator/create-task`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${this.apiKey}`,
@@ -94,10 +96,12 @@ class PrintfulMockupClient {
 
     if (!response.ok) {
       const error = await response.text();
+      console.error('[Printful Mockup] Task creation failed:', error);
       throw new Error(`Failed to create mockup task: ${error}`);
     }
 
     const data: MockupTaskResponse = await response.json();
+    console.log('[Printful Mockup] Task created successfully:', data.result.task_key);
     return data.result.task_key;
   }
 

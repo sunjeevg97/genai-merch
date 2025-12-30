@@ -260,11 +260,8 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
           {/* Design Preview/Upload */}
           <DesignPreview
             design={design}
+            onDesignChange={setDesign}
             onRemove={() => setDesign(null)}
-            onUpload={() => {
-              // TODO: Implement design upload modal
-              alert('Design upload coming soon!');
-            }}
           />
 
           <Separator />

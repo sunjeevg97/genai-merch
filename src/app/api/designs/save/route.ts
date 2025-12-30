@@ -7,12 +7,9 @@
  * - {
  *     name: string,
  *     imageUrl: string,
- *     metadata: {
- *       canvas: { width, height, backgroundColor },
- *       logo: { originalUrl, position, scale, rotation },
- *       mockup: { type, view, color },
- *       printArea: { width, height, dpi }
- *     }
+ *     vectorUrl?: string,
+ *     metadata?: object,
+ *     aiPrompt?: string
  *   }
  *
  * Response:
@@ -20,23 +17,75 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import { getUser } from '@/lib/supabase/server';
+import { prisma } from '@/lib/prisma';
+
+/**
+ * Request validation schema
+ */
+const saveDesignSchema = z.object({
+  name: z.string().min(1, 'Design name is required').max(255),
+  imageUrl: z.string().url('Image URL must be a valid URL'),
+  vectorUrl: z.string().url().optional().nullable(),
+  metadata: z.record(z.string(), z.any()).optional().default({}),
+  aiPrompt: z.string().optional().nullable(),
+});
 
 export async function POST(request: NextRequest) {
   try {
-    // Implementation will go here
-    // 1. Get user from session
-    // 2. Validate request body
-    // 3. Create design record in database
-    // 4. Return created design
+    // 1. Authenticate user
+    const user = await getUser();
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
 
-    return NextResponse.json(
-      { error: 'Not implemented yet' },
-      { status: 501 }
-    );
+    // 2. Parse and validate request body
+    const body = await request.json();
+    const validation = saveDesignSchema.safeParse(body);
+
+    if (!validation.success) {
+      return NextResponse.json(
+        {
+          error: 'Invalid request',
+          details: validation.error.issues,
+        },
+        { status: 400 }
+      );
+    }
+
+    const { name, imageUrl, vectorUrl, metadata, aiPrompt } = validation.data;
+
+    // 3. Create design record in database
+    const design = await prisma.design.create({
+      data: {
+        userId: user.id,
+        name,
+        imageUrl,
+        vectorUrl: vectorUrl || null,
+        metadata: (metadata || {}) as any,
+        aiPrompt: aiPrompt || null,
+      },
+    });
+
+    console.log('[Design Save] Design saved:', {
+      id: design.id,
+      userId: user.id,
+      name: design.name,
+    });
+
+    // 4. Return created design
+    return NextResponse.json({
+      success: true,
+      data: design,
+    });
   } catch (error) {
-    console.error('Save error:', error);
+    console.error('[Design Save] Error:', error);
     return NextResponse.json(
-      { error: 'Save failed' },
+      { error: 'Failed to save design' },
       { status: 500 }
     );
   }

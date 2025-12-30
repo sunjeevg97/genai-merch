@@ -243,6 +243,38 @@ export async function POST(request: NextRequest) {
     // Use permanent Supabase URL if available, otherwise fall back to DALL-E URL
     const finalImageUrl = uploadResult.success ? uploadResult.url! : dalleImageUrl;
 
+    // STEP 4: Save design to database
+    let savedDesign = null;
+    if (uploadResult.success) {
+      try {
+        console.log('[Generate Design] Step 4: Saving to database...');
+
+        const { prisma } = await import('@/lib/prisma');
+
+        savedDesign = await prisma.design.create({
+          data: {
+            userId: user.id,
+            name: `AI Design - ${new Date().toLocaleDateString()}`,
+            imageUrl: finalImageUrl,
+            metadata: {
+              prompt: prompt,
+              refinedPrompt: refinedPrompt,
+              revisedPrompt: revisedPrompt,
+              eventType: eventType || null,
+              products: products || [],
+              generatedAt: new Date().toISOString(),
+            },
+            aiPrompt: prompt,
+          },
+        });
+
+        console.log('[Generate Design] Design saved to database:', savedDesign.id);
+      } catch (dbError) {
+        console.error('[Generate Design] Failed to save to database:', dbError);
+        // Non-critical error, continue with response
+      }
+    }
+
     // 6. Log successful generation
     const duration = Date.now() - startTime;
     console.log('[Generate Design] Success:', {
@@ -250,6 +282,7 @@ export async function POST(request: NextRequest) {
       imageUrl: finalImageUrl,
       isPermanent: uploadResult.success,
       storagePath: uploadResult.path,
+      designId: savedDesign?.id || null,
       duration: `${duration}ms`,
       remaining: rateLimit.remaining,
     });
@@ -259,10 +292,12 @@ export async function POST(request: NextRequest) {
       JSON.stringify({
         success: true,
         data: {
+          id: savedDesign?.id || designId,
           imageUrl: finalImageUrl,
           revisedPrompt,
           originalPrompt: prompt,
           refinedPrompt,
+          saved: !!savedDesign,
         },
       }),
       {

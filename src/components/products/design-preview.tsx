@@ -6,11 +6,14 @@
 
 'use client';
 
+import { useState } from 'react';
 import Image from 'next/image';
-import { X, Upload, Sparkles } from 'lucide-react';
+import { X, Upload, Sparkles, Images } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import Link from 'next/link';
+import { DesignGalleryModal } from './design-gallery-modal';
+import { FileUploadModal } from './file-upload-modal';
 
 export interface DesignData {
   id: string;
@@ -20,46 +23,79 @@ export interface DesignData {
 
 interface DesignPreviewProps {
   design: DesignData | null;
+  onDesignChange?: (design: DesignData) => void;
   onRemove?: () => void;
-  onUpload?: () => void;
 }
 
-export function DesignPreview({ design, onRemove, onUpload }: DesignPreviewProps) {
+export function DesignPreview({ design, onDesignChange, onRemove }: DesignPreviewProps) {
+  const [showGallery, setShowGallery] = useState(false);
+  const [showUpload, setShowUpload] = useState(false);
+
+  function handleSelectDesign(selectedDesign: DesignData) {
+    if (onDesignChange) {
+      onDesignChange(selectedDesign);
+    }
+  }
+
+  function handleUploadComplete(uploadedDesign: DesignData) {
+    if (onDesignChange) {
+      onDesignChange(uploadedDesign);
+    }
+  }
+
   if (!design) {
     // Show "Add Design" options when no design
     return (
-      <div className="space-y-3">
-        <label className="text-sm font-medium text-gray-900">Custom Design (Optional)</label>
+      <>
+        <div className="space-y-3">
+          <label className="text-sm font-medium text-gray-900">Custom Design (Optional)</label>
 
-        <Card className="border-dashed">
-          <CardContent className="flex flex-col items-center justify-center py-8 text-center">
-            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100">
-              <Sparkles className="h-8 w-8 text-gray-400" />
-            </div>
+          <Card className="border-dashed">
+            <CardContent className="flex flex-col items-center justify-center py-8 text-center">
+              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100">
+                <Sparkles className="h-8 w-8 text-gray-400" />
+              </div>
 
-            <h3 className="mb-2 font-semibold text-gray-900">Add Custom Design</h3>
-            <p className="mb-4 text-sm text-gray-600">
-              Make this product unique with a custom design
-            </p>
+              <h3 className="mb-2 font-semibold text-gray-900">Add Custom Design</h3>
+              <p className="mb-4 text-sm text-gray-600">
+                Make this product unique with a custom design
+              </p>
 
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Button asChild variant="default" size="sm">
-                <Link href="/design">
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  Create with AI
-                </Link>
-              </Button>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button asChild variant="default" size="sm">
+                  <Link href="/design/create">
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    Create with AI
+                  </Link>
+                </Button>
 
-              {onUpload && (
-                <Button variant="outline" size="sm" onClick={onUpload}>
+                <Button variant="outline" size="sm" onClick={() => setShowGallery(true)}>
+                  <Images className="mr-2 h-4 w-4" />
+                  Browse Designs
+                </Button>
+
+                <Button variant="outline" size="sm" onClick={() => setShowUpload(true)}>
                   <Upload className="mr-2 h-4 w-4" />
                   Upload Design
                 </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Modals */}
+        <DesignGalleryModal
+          open={showGallery}
+          onOpenChange={setShowGallery}
+          onSelectDesign={handleSelectDesign}
+        />
+
+        <FileUploadModal
+          open={showUpload}
+          onOpenChange={setShowUpload}
+          onUploadComplete={handleUploadComplete}
+        />
+      </>
     );
   }
 

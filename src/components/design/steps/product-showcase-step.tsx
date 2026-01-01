@@ -502,13 +502,13 @@ function ProductDetailModal({ product, designUrl, isOpen, onClose }: ProductDeta
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{product.name}</DialogTitle>
-          <DialogDescription>{product.description}</DialogDescription>
+      <DialogContent className="max-w-6xl max-h-[95vh] overflow-y-auto p-6 sm:p-8">
+        <DialogHeader className="space-y-3">
+          <DialogTitle className="text-2xl">{product.name}</DialogTitle>
+          <DialogDescription className="text-base">{product.description}</DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="grid gap-8 md:grid-cols-2 mt-6">
           {/* Left: Product Preview / Mockup */}
           <div>
             {designUrl && selectedVariant ? (
@@ -532,18 +532,18 @@ function ProductDetailModal({ product, designUrl, isOpen, onClose }: ProductDeta
           </div>
 
           {/* Right: Product Details & Add to Cart */}
-          <div className="space-y-6">
+          <div className="space-y-8">
             {/* Price */}
-            <div>
-              <p className="text-sm text-muted-foreground">Price</p>
-              <p className="text-3xl font-bold">${(selectedVariant.price / 100).toFixed(2)}</p>
+            <div className="pb-4 border-b">
+              <p className="text-sm text-muted-foreground mb-2">Price</p>
+              <p className="text-4xl font-bold">${(selectedVariant.price / 100).toFixed(2)}</p>
             </div>
 
             {/* Size Selection */}
             {availableSizes.length > 1 && (
-              <div className="space-y-2">
-                <p className="text-sm font-medium">Size</p>
-                <div className="flex flex-wrap gap-2">
+              <div className="space-y-3">
+                <p className="text-sm font-semibold uppercase tracking-wide text-gray-700">Size</p>
+                <div className="flex flex-wrap gap-3">
                   {availableSizes.map((size) => {
                     const variant = product.variants.find((v) => v.size === size);
                     const isSelected = variant?.id === selectedVariantId;
@@ -551,7 +551,8 @@ function ProductDetailModal({ product, designUrl, isOpen, onClose }: ProductDeta
                       <Button
                         key={size}
                         variant={isSelected ? 'default' : 'outline'}
-                        size="sm"
+                        size="default"
+                        className="min-w-[60px] h-11"
                         onClick={() => variant && setSelectedVariantId(variant.id)}
                       >
                         {size}
@@ -564,9 +565,9 @@ function ProductDetailModal({ product, designUrl, isOpen, onClose }: ProductDeta
 
             {/* Color Selection */}
             {availableColors.length > 1 && (
-              <div className="space-y-2">
-                <p className="text-sm font-medium">Color</p>
-                <div className="flex flex-wrap gap-2">
+              <div className="space-y-3">
+                <p className="text-sm font-semibold uppercase tracking-wide text-gray-700">Color</p>
+                <div className="flex flex-wrap gap-3">
                   {availableColors.map((color) => {
                     const variant = product.variants.find((v) => v.color === color);
                     const isSelected = variant?.id === selectedVariantId;
@@ -574,7 +575,8 @@ function ProductDetailModal({ product, designUrl, isOpen, onClose }: ProductDeta
                       <Button
                         key={color}
                         variant={isSelected ? 'default' : 'outline'}
-                        size="sm"
+                        size="default"
+                        className="min-w-[80px] h-11"
                         onClick={() => variant && setSelectedVariantId(variant.id)}
                       >
                         {color}
@@ -586,20 +588,22 @@ function ProductDetailModal({ product, designUrl, isOpen, onClose }: ProductDeta
             )}
 
             {/* Quantity */}
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Quantity</p>
-              <div className="flex items-center gap-2">
+            <div className="space-y-3">
+              <p className="text-sm font-semibold uppercase tracking-wide text-gray-700">Quantity</p>
+              <div className="flex items-center gap-3">
                 <Button
                   variant="outline"
-                  size="sm"
+                  size="default"
+                  className="h-12 w-12"
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
                 >
                   -
                 </Button>
-                <span className="w-12 text-center font-medium">{quantity}</span>
+                <span className="w-16 text-center text-lg font-semibold">{quantity}</span>
                 <Button
                   variant="outline"
-                  size="sm"
+                  size="default"
+                  className="h-12 w-12"
                   onClick={() => setQuantity(Math.min(99, quantity + 1))}
                 >
                   +
@@ -609,7 +613,7 @@ function ProductDetailModal({ product, designUrl, isOpen, onClose }: ProductDeta
 
             {/* Add to Cart Button */}
             <Button
-              className="w-full"
+              className="w-full mt-4"
               size="lg"
               onClick={handleAddToCart}
               disabled={!selectedVariant?.inStock}

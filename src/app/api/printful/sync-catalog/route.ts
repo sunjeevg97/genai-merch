@@ -14,11 +14,14 @@ import { prisma } from '@/lib/prisma';
 import {
   shouldIncludeProduct,
   calculateRetailPrice,
-  parseVariantAttributes,
   mapProductCategory,
   parsePriceToCents,
   formatCentsToDollars,
 } from '@/lib/printful/products';
+import {
+  parseSizeFromVariant,
+  parseColorFromVariant,
+} from '@/lib/utils/variant-parsing';
 import type {
   PrintfulProduct,
   PrintfulProductVariant,
@@ -31,6 +34,7 @@ interface SyncStats {
   products_synced: number;
   variants_synced: number;
   products_skipped: number;
+  mockup_incompatible_products: number; // Products that don't support mockup generation
   errors: Array<{
     product_id?: number;
     variant_id?: number;
@@ -40,25 +44,103 @@ interface SyncStats {
 }
 
 /**
+ * Validate if a string is a valid image URL
+ */
+function isValidImageUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check if a product supports mockup generation
+ *
+ * Products that don't support mockups should be excluded from the catalog
+ * to prevent errors when users try to generate previews.
+ *
+ * NOTE: We don't filter by placement here because we want to check if the product
+ * has ANY mockup styles at all, regardless of placement.
+ */
+async function checkMockupCompatibility(productId: number): Promise<boolean> {
+  try {
+    // Don't filter by placement - we want to know if ANY mockup styles exist
+    const styles = await printful.getMockupStyles(productId, undefined);
+
+    // Product is mockup-compatible if it has at least one mockup style
+    const isCompatible = styles && styles.length > 0;
+
+    if (!isCompatible) {
+      console.log(`[Mockup Check] Product ${productId} has no mockup styles available`);
+    } else {
+      console.log(`[Mockup Check] Product ${productId} has ${styles.length} mockup style(s)`);
+    }
+
+    return isCompatible;
+  } catch (error) {
+    // If we get a 404 or any other error, the product doesn't support mockups
+    console.log(`[Mockup Check] Product ${productId} mockup API error:`,
+      error instanceof Error ? error.message : 'Unknown error');
+    return false;
+  }
+}
+
+/**
  * Sync a single product with its variants
  */
 async function syncProduct(
   product: PrintfulProduct
-): Promise<{ variants: number; errors: string[] }> {
+): Promise<{ variants: number; errors: string[]; mockupIncompatible?: boolean }> {
   const errors: string[] = [];
   let variantCount = 0;
 
   try {
     console.log(`[Sync] Processing product: ${product.title} (ID: ${product.id})`);
 
+    // Check mockup compatibility - mark products as inactive if they don't support mockups
+    const isMockupCompatible = await checkMockupCompatibility(product.id);
+    if (!isMockupCompatible) {
+      console.log(`[Sync] Product ${product.id} does not support mockups - marking as inactive`);
+
+      // Mark product as inactive in database (preserves data for existing orders)
+      await prisma.product.upsert({
+        where: { printfulId: product.id },
+        update: {
+          active: false, // Hide from catalog
+          updatedAt: new Date(),
+        },
+        create: {
+          printfulId: product.id,
+          name: product.title,
+          description: product.description || null,
+          category: mapProductCategory(product),
+          productType: product.type,
+          basePrice: 0,
+          currency: 'USD',
+          imageUrl: '',
+          mockupUrl: product.image || '',
+          active: false, // Inactive on creation
+        },
+      });
+
+      return { variants: 0, errors: [], mockupIncompatible: true };
+    }
+
+    console.log(`[Sync] Product ${product.id} is mockup-compatible, continuing sync...`);
+
     // Determine category
     const category = mapProductCategory(product);
 
     // Get product image (use first file's image or fallback to product.image)
-    const productImage =
-      product.files?.find((f) => f.type === 'default')?.title ||
+    // Validate it's a real URL, not metadata like "Print file"
+    const rawProductImage =
+      product.files?.find((f) => f.type === 'default')?.preview_url ||
       product.image ||
       '';
+    const productImage = isValidImageUrl(rawProductImage) ? rawProductImage : '';
 
     // Upsert product
     const dbProduct = await prisma.product.upsert({
@@ -125,8 +207,9 @@ async function syncProduct(
     // Sync each variant
     for (const variant of variants) {
       try {
-        // Parse variant attributes
-        const { size, color } = parseVariantAttributes(variant.name);
+        // Parse variant attributes using improved parsing that handles pipe-separated format
+        const size = parseSizeFromVariant(variant.name, variant.size || null);
+        const color = parseColorFromVariant(variant.name, variant.color || null);
 
         // Parse base price from Printful
         const basePriceCents = parsePriceToCents(variant.price);
@@ -139,6 +222,9 @@ async function syncProduct(
           lowestPrice = basePriceCents;
         }
 
+        // Validate variant image URL
+        const variantImageUrl = isValidImageUrl(variant.image) ? variant.image : '';
+
         // Upsert variant
         await prisma.productVariant.upsert({
           where: { printfulVariantId: variant.id },
@@ -148,7 +234,7 @@ async function syncProduct(
             color: color,
             price: retailPriceCents,
             inStock: variant.in_stock,
-            imageUrl: variant.image,
+            imageUrl: variantImageUrl,
             metadata: {
               color_code: variant.color_code,
               color_code2: variant.color_code2,
@@ -169,7 +255,7 @@ async function syncProduct(
             color: color,
             price: retailPriceCents,
             inStock: variant.in_stock,
-            imageUrl: variant.image,
+            imageUrl: variantImageUrl,
             metadata: {
               color_code: variant.color_code,
               color_code2: variant.color_code2,
@@ -247,6 +333,7 @@ export async function GET(request: NextRequest) {
     products_synced: 0,
     variants_synced: 0,
     products_skipped: 0,
+    mockup_incompatible_products: 0,
     errors: [],
     duration_ms: 0,
   };
@@ -268,6 +355,13 @@ export async function GET(request: NextRequest) {
     for (const product of filteredProducts) {
       try {
         const result = await syncProduct(product);
+
+        // Skip products that don't support mockups
+        if (result.mockupIncompatible) {
+          stats.mockup_incompatible_products++;
+          console.log(`[Sync] Product ${product.id} skipped - no mockup support`);
+          continue;
+        }
 
         stats.products_synced++;
         stats.variants_synced += result.variants;
@@ -300,7 +394,8 @@ export async function GET(request: NextRequest) {
     console.log('\n=== Sync Complete ===');
     console.log(`Products synced: ${stats.products_synced}`);
     console.log(`Variants synced: ${stats.variants_synced}`);
-    console.log(`Products skipped: ${stats.products_skipped}`);
+    console.log(`Products skipped (category/type filters): ${stats.products_skipped}`);
+    console.log(`Products excluded (no mockup support): ${stats.mockup_incompatible_products}`);
     console.log(`Errors: ${stats.errors.length}`);
     console.log(`Duration: ${stats.duration_ms}ms\n`);
 

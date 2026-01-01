@@ -29,6 +29,14 @@ export interface CartItem {
     imageUrl: string;
     thumbnailUrl?: string;
   } | null;
+  // Mockup-specific configuration (optional)
+  mockupConfig?: {
+    mockupUrl: string; // Generated mockup preview URL
+    technique: string; // Printing technique (dtg, embroidery, etc.)
+    placement: string; // Design placement (front, back, etc.)
+    styleId: number; // Printful mockup style ID
+    styleName: string; // Customer-friendly style name
+  };
   quantity: number;
   unitPrice: number; // Price in cents
 }
@@ -99,11 +107,14 @@ export const useCart = create<CartStore>()(
         addItem: (item) => {
           const { items, _calculateSubtotal, _calculateItemCount } = get();
 
-          // Check if item already exists (same variant + design)
+          // Check if item already exists (same variant + design + mockup configuration)
           const existingItemIndex = items.findIndex(
             (i) =>
               i.productVariantId === item.productVariantId &&
-              i.design?.id === item.design?.id
+              i.design?.id === item.design?.id &&
+              i.mockupConfig?.styleId === item.mockupConfig?.styleId &&
+              i.mockupConfig?.placement === item.mockupConfig?.placement &&
+              i.mockupConfig?.technique === item.mockupConfig?.technique
           );
 
           let newItems: CartItem[];

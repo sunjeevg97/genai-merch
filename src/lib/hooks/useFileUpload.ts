@@ -87,6 +87,9 @@ export function useFileUpload(): UseFileUploadReturn {
         // Create XMLHttpRequest for progress tracking
         const xhr = new XMLHttpRequest();
 
+        // Set timeout (30 seconds)
+        xhr.timeout = 30000;
+
         // Create promise to handle upload
         const uploadPromise = new Promise<UploadResult>((resolve, reject) => {
           // Track upload progress
@@ -120,6 +123,15 @@ export function useFileUpload(): UseFileUploadReturn {
                 reject(new Error(`Upload failed with status ${xhr.status}`));
               }
             }
+          });
+
+          // Handle timeout
+          xhr.addEventListener('timeout', () => {
+            reject(
+              new Error(
+                'Upload timed out. The file may be too large or the connection is slow. Please try again.'
+              )
+            );
           });
 
           // Handle errors

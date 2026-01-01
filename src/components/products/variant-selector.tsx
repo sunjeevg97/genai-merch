@@ -10,6 +10,8 @@ import { useEffect, useMemo } from 'react';
 import type { ProductVariant } from '@prisma/client';
 import { SizeSelector, type SizeOption } from './size-selector';
 import { ColorSelector, type ColorOption } from './color-selector';
+import { sortSizes, formatSizeLabel } from '@/lib/utils/size-ordering';
+import { parseSizeFromVariant, parseColorFromVariant } from '@/lib/utils/variant-parsing';
 
 interface VariantSelectorProps {
   variants: ProductVariant[];
@@ -21,34 +23,26 @@ interface VariantSelectorProps {
 }
 
 /**
- * Extract unique sizes from variants
+ * Extract unique sizes from variants and sort from smallest to largest
  */
 function extractSizes(variants: ProductVariant[]): SizeOption[] {
   const sizeMap = new Map<string, SizeOption>();
 
   variants.forEach((variant) => {
-    if (variant.size) {
-      const existing = sizeMap.get(variant.size);
-      sizeMap.set(variant.size, {
-        value: variant.size,
-        label: variant.size,
+    // Parse size from variant name if needed
+    const size = parseSizeFromVariant(variant.name, variant.size);
+
+    if (size) {
+      const existing = sizeMap.get(size);
+      sizeMap.set(size, {
+        value: size,
+        label: formatSizeLabel(size),
         available: existing?.available || variant.inStock,
       });
     }
   });
 
-  return Array.from(sizeMap.values()).sort((a, b) => {
-    // Sort by size order: XS, S, M, L, XL, XXL, etc.
-    const sizeOrder = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
-    const aIndex = sizeOrder.indexOf(a.value);
-    const bIndex = sizeOrder.indexOf(b.value);
-
-    if (aIndex !== -1 && bIndex !== -1) {
-      return aIndex - bIndex;
-    }
-
-    return a.value.localeCompare(b.value);
-  });
+  return sortSizes(Array.from(sizeMap.values()));
 }
 
 /**
@@ -62,15 +56,21 @@ function extractColors(
 
   // Filter variants by selected size if applicable
   const filteredVariants = selectedSize
-    ? variants.filter((v) => v.size === selectedSize)
+    ? variants.filter((v) => {
+        const size = parseSizeFromVariant(v.name, v.size);
+        return size === selectedSize;
+      })
     : variants;
 
   filteredVariants.forEach((variant) => {
-    if (variant.color) {
-      const existing = colorMap.get(variant.color);
-      colorMap.set(variant.color, {
-        value: variant.color,
-        label: variant.color,
+    // Parse color from variant name if needed
+    const color = parseColorFromVariant(variant.name, variant.color);
+
+    if (color) {
+      const existing = colorMap.get(color);
+      colorMap.set(color, {
+        value: color,
+        label: color,
         available: existing?.available || variant.inStock,
       });
     }
@@ -97,17 +97,25 @@ export function VariantSelector({
   // Find matching variant when size and color are selected
   useEffect(() => {
     if (selectedSize && selectedColor) {
-      const matchingVariant = variants.find(
-        (v) => v.size === selectedSize && v.color === selectedColor
-      );
+      const matchingVariant = variants.find((v) => {
+        const size = parseSizeFromVariant(v.name, v.size);
+        const color = parseColorFromVariant(v.name, v.color);
+        return size === selectedSize && color === selectedColor;
+      });
       onVariantChange(matchingVariant || null);
     } else if (selectedSize && !selectedColor) {
       // If only size is selected, find any variant with that size
-      const matchingVariant = variants.find((v) => v.size === selectedSize);
+      const matchingVariant = variants.find((v) => {
+        const size = parseSizeFromVariant(v.name, v.size);
+        return size === selectedSize;
+      });
       onVariantChange(matchingVariant || null);
     } else if (!selectedSize && selectedColor) {
       // If only color is selected, find any variant with that color
-      const matchingVariant = variants.find((v) => v.color === selectedColor);
+      const matchingVariant = variants.find((v) => {
+        const color = parseColorFromVariant(v.name, v.color);
+        return color === selectedColor;
+      });
       onVariantChange(matchingVariant || null);
     } else {
       onVariantChange(null);
@@ -155,9 +163,11 @@ export function VariantSelector({
       )}
 
       {/* Variant Not Found Warning */}
-      {selectedSize && selectedColor && !variants.find(
-        (v) => v.size === selectedSize && v.color === selectedColor
-      ) && (
+      {selectedSize && selectedColor && !variants.find((v) => {
+        const size = parseSizeFromVariant(v.name, v.size);
+        const color = parseColorFromVariant(v.name, v.color);
+        return size === selectedSize && color === selectedColor;
+      }) && (
         <p className="text-sm text-red-600">
           This combination is not available. Please select a different size or color.
         </p>

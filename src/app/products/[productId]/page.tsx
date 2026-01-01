@@ -56,6 +56,19 @@ function getCategoryColor(category: string): string {
   }
 }
 
+/**
+ * Validate if a string is a valid image URL
+ */
+function isValidImageUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 export default function ProductDetailPage({ params }: ProductDetailPageProps) {
   const resolvedParams = use(params);
   const searchParams = useSearchParams();
@@ -132,8 +145,11 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
     notFound();
   }
 
-  // Get current variant image or product image
-  const displayImage = selectedVariant?.imageUrl || product.imageUrl;
+  // Get current variant image or product image (validate URLs)
+  const variantImage = selectedVariant?.imageUrl;
+  const productImage = product.imageUrl;
+  const displayImage = (isValidImageUrl(variantImage) ? variantImage : null) ||
+                       (isValidImageUrl(productImage) ? productImage : null);
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -182,11 +198,20 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
           {viewMode === 'mockup' && design ? (
             <MockupPreview
               productVariantId={selectedVariant?.id || null}
+              printfulProductId={product.printfulId}
               designUrl={design.imageUrl}
               productImageUrl={product.imageUrl}
               productType={product.productType}
               placement={placement}
               onPlacementChange={setPlacement}
+              product={{
+                id: product.id,
+                name: product.name,
+                imageUrl: product.imageUrl,
+                productType: product.productType,
+              }}
+              selectedVariant={selectedVariant}
+              design={design}
             />
           ) : (
             <Card className="overflow-hidden">

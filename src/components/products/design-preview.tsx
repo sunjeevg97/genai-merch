@@ -113,6 +113,7 @@ export function DesignPreview({ design, onDesignChange, onRemove }: DesignPrevie
                 src={design.thumbnailUrl || design.imageUrl}
                 alt="Custom design"
                 fill
+                sizes="80px"
                 className="object-cover"
               />
             </div>

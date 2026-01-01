@@ -263,6 +263,97 @@ export class PrintfulClient {
   // ==========================================================================
 
   /**
+   * Get available mockup styles for a product
+   *
+   * Fetches default mockup presentation styles (flat lay, model, hanger, etc.)
+   * for a specific Printful product. Excludes seasonal/special styles like
+   * Halloween, Valentine's Day, etc.
+   *
+   * @param productId - Printful catalog product ID
+   * @returns Array of default mockup styles
+   *
+   * @example
+   * const styles = await printful.getMockupStyles(71);
+   * styles.forEach(style => {
+   *   console.log(`${style.category_name} - ${style.view_name}`);
+   * });
+   */
+  async getMockupStyles(productId: number, placementFilter?: string): Promise<Array<{
+    id: number;
+    category_name: string;
+    view_name: string;
+    template_width: number;
+    template_height: number;
+    placements: string[];
+  }>> {
+    // V2 API returns { data: [...], extra: [], paging: {...} }
+    // NOT { result: [...] } like v1
+    // Use default_mockup_styles=true to exclude seasonal/special styles
+    const response = await this.request<any>(
+      'GET',
+      `/v2/catalog-products/${productId}/mockup-styles?default_mockup_styles=true`
+    );
+
+    console.log('[Printful] getMockupStyles - Response keys:', Object.keys(response));
+
+    // V2 API structure: response contains { data, extra, paging, _links }
+    // Each data item is a placement with mockup_styles array
+    if (!response.data || !Array.isArray(response.data)) {
+      console.error('[Printful] getMockupStyles - Invalid response structure');
+      console.log('[Printful] getMockupStyles - Full response:', JSON.stringify(response, null, 2));
+      throw new Error('Printful v2 API returned unexpected structure - missing data array');
+    }
+
+    // Build a map of styles with their supported placements
+    const styleMap = new Map<number, {
+      id: number;
+      category_name: string;
+      view_name: string;
+      template_width: number;
+      template_height: number;
+      placements: Set<string>;
+    }>();
+
+    for (const placementData of response.data) {
+      const placement = placementData.placement;
+
+      if (placementData.mockup_styles && Array.isArray(placementData.mockup_styles)) {
+        for (const style of placementData.mockup_styles) {
+          if (!styleMap.has(style.id)) {
+            styleMap.set(style.id, {
+              id: style.id,
+              category_name: style.category_name,
+              view_name: style.view_name,
+              template_width: placementData.print_area_width || 0,
+              template_height: placementData.print_area_height || 0,
+              placements: new Set([placement]),
+            });
+          } else {
+            // Add this placement to the style's supported placements
+            styleMap.get(style.id)!.placements.add(placement);
+          }
+        }
+      }
+    }
+
+    // Convert to array and filter by placement if specified
+    let styles = Array.from(styleMap.values()).map(style => ({
+      ...style,
+      placements: Array.from(style.placements),
+    }));
+
+    // Filter by placement if specified
+    if (placementFilter) {
+      styles = styles.filter(style => style.placements.includes(placementFilter));
+      console.log('[Printful] getMockupStyles - Filtered to', styles.length, 'styles for placement:', placementFilter);
+    }
+
+    console.log('[Printful] getMockupStyles - Extracted', styles.length, 'unique styles from', response.data.length, 'placements');
+
+    return styles;
+  }
+
+  /**
    * Create mockup generation task
    *
    * Generates product mockups with design applied.

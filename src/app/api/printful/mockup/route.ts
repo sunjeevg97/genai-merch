@@ -31,9 +31,43 @@ const mockupRequestSchema = z.object({
   productVariantId: z.string().min(1, 'Product variant ID is required'),
   designImageUrl: z.string().url('Design image URL must be a valid URL'),
   placement: z
-    .enum(['front', 'back', 'left', 'right', 'sleeve_left', 'sleeve_right'])
+    .enum([
+      'front',
+      'back',
+      'left',
+      'right',
+      'sleeve_left',
+      'sleeve_right',
+      'label_inside',
+      'label_outside',
+      'front_dtf',
+      'front_large_dtf',
+      'back_dtf',
+      'back_large_dtf',
+      'short_sleeve_left_dtf',
+      'short_sleeve_right_dtf',
+      'label_inside_dtf',
+      'embroidery_front',
+      'embroidery_front_large',
+      'embroidery_back',
+      'embroidery_left',
+      'embroidery_right',
+      'front_dtf_hat',
+      'back_dtf_hat',
+      'default',
+    ])
     .optional()
     .default('front'),
+  position: z.object({
+    area_width: z.number().positive().optional(),
+    area_height: z.number().positive().optional(),
+    width: z.number().positive(),
+    height: z.number().positive(),
+    top: z.number().min(0),
+    left: z.number().min(0),
+  }).optional(),
+  styleId: z.number().positive().optional(),
+  technique: z.enum(['dtg', 'dtfilm', 'embroidery', 'sublimation']).optional(),
 });
 
 /**
@@ -63,22 +97,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: 'Invalid request',
-          details: validation.error.errors,
+          details: validation.error.issues,
         },
         { status: 400 }
       );
     }
 
-    const { productVariantId, designImageUrl, placement } = validation.data;
+    const { productVariantId, designImageUrl, placement, position, styleId, technique } = validation.data;
 
     // Clean expired cache entries
     cleanExpiredCache();
 
-    // Generate cache key
+    // Generate cache key (include technique for unique caching)
     const cacheKey = generateMockupCacheKey(
       productVariantId,
       designImageUrl,
-      placement as MockupPlacement
+      placement as MockupPlacement,
+      position,
+      styleId,
+      technique
     );
 
     // Check cache first
@@ -95,7 +132,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Fetch product variant to get Printful variant ID
+    // Fetch product variant to get Printful variant ID and product ID
     const variant = await prisma.productVariant.findUnique({
       where: { id: productVariantId },
       select: {
@@ -103,6 +140,8 @@ export async function POST(request: NextRequest) {
         printfulVariantId: true,
         product: {
           select: {
+            printfulId: true,
+            name: true,
             productType: true,
           },
         },
@@ -117,24 +156,53 @@ export async function POST(request: NextRequest) {
     }
 
     if (!variant.printfulVariantId) {
+      console.error('[Mockup API] Missing printfulVariantId:', {
+        variantId: productVariantId,
+        variantName: variant.id,
+      });
       return NextResponse.json(
-        { error: 'Product variant does not have a Printful variant ID' },
+        {
+          error: 'Product variant not synced with Printful',
+          message:
+            'This product variant does not have a Printful variant ID. Please sync your product catalog from Printful first by visiting /api/printful/sync-catalog',
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!variant.product.printfulId) {
+      console.error('[Mockup API] Missing printfulId:', {
+        variantId: productVariantId,
+      });
+      return NextResponse.json(
+        {
+          error: 'Product not synced with Printful',
+          message: 'This product does not have a Printful product ID.',
+        },
         { status: 400 }
       );
     }
 
     console.log('[Mockup API] Generating mockup:', {
       variantId: productVariantId,
+      printfulProductId: variant.product.printfulId,
       printfulVariantId: variant.printfulVariantId,
+      productName: variant.product.name,
+      productType: variant.product.productType,
       placement,
+      position,
     });
 
-    // Generate mockup
+    // Generate mockup (pass product name for placement detection)
     const result = await generateMockup(
-      productVariantId,
-      parseInt(variant.printfulVariantId),
+      variant.product.printfulId,
+      variant.printfulVariantId,
       designImageUrl,
-      placement as MockupPlacement
+      variant.product.name,
+      placement as MockupPlacement,
+      position,
+      styleId,
+      technique
     );
 
     // Store in cache
@@ -200,7 +268,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(
         {
           error: 'Invalid request',
-          details: validation.error.errors,
+          details: validation.error.issues,
         },
         { status: 400 }
       );

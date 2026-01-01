@@ -8,6 +8,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
+import { Package } from 'lucide-react';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import type { ProductWithVariants } from '@/lib/products/queries';
@@ -83,8 +84,9 @@ export function ProductCard({ product }: ProductCardProps) {
                 }}
               />
             ) : (
-              <div className="flex h-full items-center justify-center text-gray-400">
-                <span className="text-sm">No image</span>
+              <div className="flex h-full flex-col items-center justify-center gap-2 text-gray-400">
+                <Package className="h-12 w-12" />
+                <span className="text-xs">No image available</span>
               </div>
             )}
 

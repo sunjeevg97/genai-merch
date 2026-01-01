@@ -143,13 +143,14 @@ export interface GeneratedDesign {
 /**
  * Wizard Steps
  *
- * Enumeration of the four steps in the streamlined design wizard flow.
+ * Enumeration of the five steps in the streamlined design wizard flow.
  */
 export enum WizardStep {
   EventType = 1,      // Step 1: Select event type/purpose
   EventDetails = 2,   // Step 2: Provide event details
   AiChat = 3,         // Step 3: AI chat interface for design generation
-  Products = 4,       // Step 4: Select products and checkout
+  Products = 4,       // Step 4: Select products
+  Checkout = 5,       // Step 5: Review cart and checkout
 }
 
 /**

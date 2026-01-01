@@ -1,11 +1,12 @@
 /**
  * Design Wizard Container
  *
- * Main wizard component that orchestrates the streamlined 4-step design flow:
+ * Main wizard component that orchestrates the streamlined 5-step design flow:
  * 1. Event Type Selection
  * 2. Event Details
  * 3. AI Chat Interface (with optional brand assets)
- * 4. Product Selection & Checkout
+ * 4. Product Selection
+ * 5. Checkout
  *
  * Handles step navigation, progress indication, and transitions.
  */
@@ -17,6 +18,7 @@ import { EventTypeStep } from '@/components/design/steps/event-type-step';
 import { EventDetailsStep } from '@/components/design/steps/event-details-step';
 import { ChatStep } from '@/components/design/steps/chat-step';
 import { ProductShowcaseStep } from '@/components/design/steps/product-showcase-step';
+import { CheckoutStep } from '@/components/design/steps/checkout-step';
 import { Check, Circle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -34,6 +36,7 @@ const STEPS: StepConfig[] = [
   { step: WizardStep.EventDetails, label: 'Event Details', shortLabel: 'Details' },
   { step: WizardStep.AiChat, label: 'AI Design', shortLabel: 'Design' },
   { step: WizardStep.Products, label: 'Choose Products', shortLabel: 'Products' },
+  { step: WizardStep.Checkout, label: 'Checkout', shortLabel: 'Checkout' },
 ];
 
 /**
@@ -60,6 +63,8 @@ export function DesignWizard() {
         return <ChatStep />;
       case WizardStep.Products:
         return <ProductShowcaseStep />;
+      case WizardStep.Checkout:
+        return <CheckoutStep />;
       default:
         return <EventTypeStep />;
     }

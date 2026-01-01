@@ -514,6 +514,7 @@ function ProductDetailModal({ product, designUrl, isOpen, onClose }: ProductDeta
             {designUrl && selectedVariant ? (
               <MockupPreview
                 productVariantId={selectedVariant.id}
+                printfulProductId={product.printfulId}
                 designUrl={designUrl}
                 productImageUrl={product.imageUrl}
                 productType={product.productType}

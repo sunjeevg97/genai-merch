@@ -496,6 +496,56 @@ function ProductDetailModal({ product, designUrl, isOpen, onClose }: ProductDeta
     onClose();
   };
 
+  // Color name to hex mapping for common colors
+  const colorMap: Record<string, string> = {
+    // Basics
+    'White': '#FFFFFF',
+    'Black': '#000000',
+    'Gray': '#808080',
+    'Grey': '#808080',
+    'Heather Grey': '#B8B8B8',
+    'Dark Grey': '#4A4A4A',
+    'Light Grey': '#D3D3D3',
+
+    // Blues
+    'Navy': '#000080',
+    'Navy Blue': '#000080',
+    'Royal Blue': '#4169E1',
+    'Blue': '#0000FF',
+    'Light Blue': '#ADD8E6',
+    'Sky Blue': '#87CEEB',
+
+    // Reds & Pinks
+    'Red': '#FF0000',
+    'Maroon': '#800000',
+    'Pink': '#FFC0CB',
+    'Hot Pink': '#FF69B4',
+
+    // Greens
+    'Green': '#008000',
+    'Forest Green': '#228B22',
+    'Dark Green': '#006400',
+    'Olive': '#808000',
+    'Kelly Green': '#4CBB17',
+
+    // Yellows & Oranges
+    'Yellow': '#FFFF00',
+    'Gold': '#FFD700',
+    'Orange': '#FFA500',
+
+    // Purples
+    'Purple': '#800080',
+
+    // Browns
+    'Brown': '#A52A2A',
+    'Tan': '#D2B48C',
+  };
+
+  const getColorHex = (colorName: string | null): string => {
+    if (!colorName) return '#CCCCCC';
+    return colorMap[colorName] || '#CCCCCC';
+  };
+
   // Get unique sizes and colors
   const availableSizes = Array.from(new Set(product.variants.filter((v) => v.size).map((v) => v.size)));
   const availableColors = Array.from(new Set(product.variants.filter((v) => v.color).map((v) => v.color)));
@@ -571,16 +621,25 @@ function ProductDetailModal({ product, designUrl, isOpen, onClose }: ProductDeta
                   {availableColors.map((color) => {
                     const variant = product.variants.find((v) => v.color === color);
                     const isSelected = variant?.id === selectedVariantId;
+                    const hexColor = getColorHex(color);
                     return (
-                      <Button
+                      <button
                         key={color}
-                        variant={isSelected ? 'default' : 'outline'}
-                        size="default"
-                        className="min-w-[80px] h-11"
                         onClick={() => variant && setSelectedVariantId(variant.id)}
+                        className={`flex items-center gap-2 px-4 h-11 rounded-md border-2 transition-all ${
+                          isSelected
+                            ? 'border-primary bg-primary/10 shadow-sm'
+                            : 'border-gray-200 hover:border-gray-300 bg-white'
+                        }`}
                       >
-                        {color}
-                      </Button>
+                        <div
+                          className={`w-6 h-6 rounded-full border-2 ${
+                            color === 'White' ? 'border-gray-300' : 'border-gray-200'
+                          }`}
+                          style={{ backgroundColor: hexColor }}
+                        />
+                        <span className="text-sm font-medium">{color}</span>
+                      </button>
                     );
                   })}
                 </div>

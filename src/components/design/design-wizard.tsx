@@ -1,7 +1,12 @@
 /**
  * Design Wizard Container
  *
- * Main wizard component that orchestrates the 5-step design flow.
+ * Main wizard component that orchestrates the streamlined 4-step design flow:
+ * 1. Event Type Selection
+ * 2. Event Details
+ * 3. AI Chat Interface (with optional brand assets)
+ * 4. Product Selection & Checkout
+ *
  * Handles step navigation, progress indication, and transitions.
  */
 
@@ -9,10 +14,9 @@
 
 import { useDesignWizard, WizardStep } from '@/lib/store/design-wizard';
 import { EventTypeStep } from '@/components/design/steps/event-type-step';
-import { ProductStep } from '@/components/design/steps/product-step';
-import { BrandAssetsStep } from '@/components/design/steps/brand-assets-step';
+import { EventDetailsStep } from '@/components/design/steps/event-details-step';
 import { ChatStep } from '@/components/design/steps/chat-step';
-import { CanvasStep } from '@/components/design/steps/canvas-step';
+import { ProductShowcaseStep } from '@/components/design/steps/product-showcase-step';
 import { Check, Circle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -27,10 +31,9 @@ interface StepConfig {
 
 const STEPS: StepConfig[] = [
   { step: WizardStep.EventType, label: 'Event Type', shortLabel: 'Event' },
-  { step: WizardStep.Products, label: 'Products', shortLabel: 'Products' },
-  { step: WizardStep.BrandAssets, label: 'Brand Assets', shortLabel: 'Assets' },
-  { step: WizardStep.AiChat, label: 'AI Design', shortLabel: 'Chat' },
-  { step: WizardStep.Canvas, label: 'Canvas', shortLabel: 'Canvas' },
+  { step: WizardStep.EventDetails, label: 'Event Details', shortLabel: 'Details' },
+  { step: WizardStep.AiChat, label: 'AI Design', shortLabel: 'Design' },
+  { step: WizardStep.Products, label: 'Choose Products', shortLabel: 'Products' },
 ];
 
 /**
@@ -51,14 +54,12 @@ export function DesignWizard() {
     switch (currentStep) {
       case WizardStep.EventType:
         return <EventTypeStep />;
-      case WizardStep.Products:
-        return <ProductStep />;
-      case WizardStep.BrandAssets:
-        return <BrandAssetsStep />;
+      case WizardStep.EventDetails:
+        return <EventDetailsStep />;
       case WizardStep.AiChat:
         return <ChatStep />;
-      case WizardStep.Canvas:
-        return <CanvasStep />;
+      case WizardStep.Products:
+        return <ProductShowcaseStep />;
       default:
         return <EventTypeStep />;
     }

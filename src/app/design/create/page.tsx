@@ -1,12 +1,11 @@
 /**
  * Design Wizard - Main Page
  *
- * AI-first design wizard with 5 steps:
+ * Streamlined AI-first design wizard with 4 steps:
  * 1. Event Type Selection
- * 2. Product Selection
- * 3. Brand Assets Upload (Optional)
- * 4. AI Chat Interface
- * 5. Canvas Editor (Final Tweaks)
+ * 2. Event Details
+ * 3. AI Chat Interface (with optional brand assets)
+ * 4. Product Selection & Checkout
  */
 
 'use client';

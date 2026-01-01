@@ -86,7 +86,6 @@ export function ProductShowcaseStep() {
     previousStep,
     complete,
   } = useDesignWizard();
-  const { openCart, itemCount } = useCart();
 
   const [products, setProducts] = useState<ProductWithVariants[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<ProductWithVariants[]>([]);
@@ -194,7 +193,6 @@ export function ProductShowcaseStep() {
    */
   const handleCheckout = () => {
     complete();
-    openCart();
   };
 
   if (loading) {
@@ -236,6 +234,9 @@ export function ProductShowcaseStep() {
   }
 
   const counts = getCategoryCounts();
+  const { items, subtotal, itemCount, removeItem, updateQuantity } = useCart();
+
+  const formatPrice = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
   return (
     <>
@@ -292,56 +293,166 @@ export function ProductShowcaseStep() {
           </div>
         </div>
 
-        {/* Product Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {filteredProducts.map((product) => (
-            <ProductCardInline
-              key={product.id}
-              product={product}
-              designUrl={finalDesignUrl}
-              onClick={() => handleProductClick(product)}
-            />
-          ))}
+        {/* Main Content: Products Grid + Cart Sidebar */}
+        <div className="grid gap-8 lg:grid-cols-3">
+          {/* Left: Product Grid (2/3 width on desktop) */}
+          <div className="lg:col-span-2 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              {filteredProducts.map((product) => (
+                <ProductCardInline
+                  key={product.id}
+                  product={product}
+                  designUrl={finalDesignUrl}
+                  onClick={() => handleProductClick(product)}
+                />
+              ))}
+            </div>
+
+            {filteredProducts.length === 0 && (
+              <div className="text-center py-12">
+                <Package className="mx-auto h-12 w-12 text-muted-foreground" />
+                <p className="mt-4 text-lg text-muted-foreground">No products found in this category</p>
+              </div>
+            )}
+          </div>
+
+          {/* Right: Cart Sidebar (1/3 width on desktop) */}
+          <div className="lg:col-span-1">
+            <Card className="sticky top-6">
+              <CardContent className="p-6 space-y-4">
+                {/* Cart Header */}
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold flex items-center gap-2">
+                    <ShoppingCart className="h-5 w-5" />
+                    Your Cart ({itemCount})
+                  </h3>
+                  {itemCount > 0 && (
+                    <span className="text-sm font-medium text-primary">
+                      {formatPrice(subtotal)}
+                    </span>
+                  )}
+                </div>
+
+                <Separator />
+
+                {/* Cart Items */}
+                {items.length === 0 ? (
+                  <div className="py-8 text-center space-y-2">
+                    <Package className="h-12 w-12 mx-auto text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground">
+                      Your cart is empty
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Click products to add them
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2">
+                    {items.map((item) => (
+                      <div key={item.id} className="space-y-3">
+                        <div className="flex gap-3">
+                          {/* Item Image - Use mockup if available */}
+                          <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-md bg-gray-100">
+                            <Image
+                              src={item.mockupConfig?.mockupUrl || item.design?.imageUrl || item.product.imageUrl}
+                              alt={item.product.name}
+                              fill
+                              className="object-cover"
+                            />
+                            {item.design && (
+                              <Badge className="absolute bottom-0.5 left-0.5 text-[10px] h-4 px-1" variant="secondary">
+                                Custom
+                              </Badge>
+                            )}
+                          </div>
+
+                          {/* Item Details */}
+                          <div className="flex-1 min-w-0 space-y-1">
+                            <h4 className="text-sm font-medium truncate">{item.product.name}</h4>
+                            <p className="text-xs text-muted-foreground truncate">{item.variant.name}</p>
+                            {item.mockupConfig && (
+                              <div className="flex flex-wrap gap-1">
+                                <Badge variant="outline" className="text-[10px] h-4 px-1">
+                                  {item.mockupConfig.technique.toUpperCase()}
+                                </Badge>
+                                <Badge variant="outline" className="text-[10px] h-4 px-1">
+                                  {item.mockupConfig.placement}
+                                </Badge>
+                              </div>
+                            )}
+                            <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-6 w-6 p-0"
+                                  onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                                  disabled={item.quantity <= 1}
+                                >
+                                  -
+                                </Button>
+                                <span className="text-xs w-8 text-center">{item.quantity}</span>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-6 w-6 p-0"
+                                  onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                                >
+                                  +
+                                </Button>
+                              </div>
+                              <span className="text-xs font-medium ml-auto">
+                                {formatPrice(item.unitPrice * item.quantity)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-full text-xs text-destructive hover:text-destructive"
+                          onClick={() => removeItem(item.id)}
+                        >
+                          Remove
+                        </Button>
+
+                        <Separator />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Cart Footer */}
+                {items.length > 0 && (
+                  <>
+                    <div className="space-y-2 pt-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Subtotal</span>
+                        <span className="font-semibold">{formatPrice(subtotal)}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Shipping and taxes calculated at checkout
+                      </p>
+                    </div>
+
+                    <Button onClick={handleCheckout} className="w-full" size="lg">
+                      <ShoppingCart className="mr-2 h-4 w-4" />
+                      Proceed to Checkout
+                    </Button>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </div>
 
-        {filteredProducts.length === 0 && (
-          <div className="text-center py-12">
-            <Package className="mx-auto h-12 w-12 text-muted-foreground" />
-            <p className="mt-4 text-lg text-muted-foreground">No products found in this category</p>
-          </div>
-        )}
-
-        <Separator />
-
-        {/* Navigation & Cart */}
-        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4">
-          <Button variant="outline" onClick={previousStep} type="button">
+        {/* Navigation */}
+        <div className="flex justify-center pt-4">
+          <Button variant="outline" onClick={previousStep} type="button" size="lg">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Design
           </Button>
-
-          <div className="flex items-center gap-4">
-            {itemCount > 0 && (
-              <div className="text-sm text-muted-foreground">
-                {itemCount} {itemCount === 1 ? 'item' : 'items'} in cart
-              </div>
-            )}
-
-            <Button onClick={handleCheckout} size="lg" disabled={itemCount === 0}>
-              <ShoppingCart className="mr-2 h-4 w-4" />
-              {itemCount > 0 ? 'Checkout' : 'Add Products to Continue'}
-            </Button>
-          </div>
-        </div>
-
-        {/* Browse All Products Link */}
-        <div className="text-center text-sm text-muted-foreground">
-          <p>
-            Want to explore more?{' '}
-            <Link href="/products" className="text-primary hover:underline">
-              Visit full product catalog
-            </Link>
-          </p>
         </div>
       </div>
 

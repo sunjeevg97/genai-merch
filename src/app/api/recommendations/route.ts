@@ -6,17 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getRecommendedProducts } from '@/lib/recommendations/products';
-import { z } from 'zod';
 import type { EventType, EventDetails } from '@/lib/store/design-wizard';
-
-/**
- * Request Schema
- */
-const recommendationsRequestSchema = z.object({
-  eventType: z.enum(['charity', 'sports', 'company', 'family', 'school', 'other']),
-  eventDetails: z.record(z.any()).optional(),
-  limit: z.number().min(1).max(20).optional(),
-});
 
 /**
  * POST /api/recommendations
@@ -30,19 +20,32 @@ export async function POST(request: NextRequest) {
   try {
     // Parse and validate request body
     const body = await request.json();
-    const validation = recommendationsRequestSchema.safeParse(body);
 
-    if (!validation.success) {
+    // Manual validation instead of Zod to avoid compilation issues
+    if (!body.eventType || typeof body.eventType !== 'string') {
       return NextResponse.json(
         {
           error: 'Invalid request',
-          details: validation.error.format(),
+          details: 'eventType is required and must be a string',
         },
         { status: 400 }
       );
     }
 
-    const { eventType, eventDetails = {}, limit = 8 } = validation.data;
+    const validEventTypes = ['charity', 'sports', 'company', 'family', 'school', 'other'];
+    if (!validEventTypes.includes(body.eventType)) {
+      return NextResponse.json(
+        {
+          error: 'Invalid request',
+          details: `eventType must be one of: ${validEventTypes.join(', ')}`,
+        },
+        { status: 400 }
+      );
+    }
+
+    const eventType = body.eventType;
+    const eventDetails = body.eventDetails || {};
+    const limit = body.limit || 8;
 
     // Get recommendations
     const productIds = await getRecommendedProducts(

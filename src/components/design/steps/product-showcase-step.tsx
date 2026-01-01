@@ -18,7 +18,6 @@ import { ShoppingCart, Eye, Package } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { getRecommendedProducts } from '@/lib/recommendations/products';
 
 /**
  * Product with Variants
@@ -76,8 +75,22 @@ export function ProductShowcaseStep() {
         setLoading(true);
         setError(null);
 
-        // Get recommended product IDs
-        const productIds = await getRecommendedProducts(eventType, eventDetails, 8);
+        // Get recommended product IDs from API route
+        const recommendationsResponse = await fetch('/api/recommendations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            eventType,
+            eventDetails,
+            limit: 8,
+          }),
+        });
+
+        if (!recommendationsResponse.ok) {
+          throw new Error('Failed to fetch recommendations');
+        }
+
+        const { productIds } = await recommendationsResponse.json();
 
         // Store in wizard state
         setRecommendedProducts(productIds);

@@ -34,6 +34,7 @@ import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { MockupPreview } from '@/components/products/mockup-preview';
+import type { ProductVariant } from '@prisma/client';
 
 /**
  * Product with Variants
@@ -568,6 +569,18 @@ function ProductDetailModal({ product, designUrl, isOpen, onClose }: ProductDeta
                 designUrl={designUrl}
                 productImageUrl={product.imageUrl}
                 productType={product.productType}
+                product={{
+                  id: product.id,
+                  name: product.name,
+                  imageUrl: product.imageUrl,
+                  productType: product.productType,
+                }}
+                selectedVariant={selectedVariant as ProductVariant}
+                design={{
+                  id: 'wizard-design',
+                  imageUrl: designUrl,
+                  thumbnailUrl: designUrl,
+                }}
               />
             ) : (
               <div className="relative aspect-square bg-gray-100 rounded-lg overflow-hidden">

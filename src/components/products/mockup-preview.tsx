@@ -25,9 +25,19 @@ import {
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import type { MockupPlacement, MockupPosition } from '@/lib/printful/mockups';
-import { getAvailableTechniques } from '@/lib/printful/mockups';
 import { useCart } from '@/lib/cart/store';
 import type { ProductVariant } from '@prisma/client';
+
+interface TechniqueOption {
+  value: 'dtg' | 'dtfilm' | 'embroidery' | 'digital';
+  label: string;
+  description: string;
+  isDefault: boolean;
+  placements: Array<{
+    value: string;
+    label: string;
+  }>;
+}
 
 interface MockupPreviewProps {
   productVariantId: string | null;
@@ -88,8 +98,46 @@ export function MockupPreview({
   // Get cart actions
   const { addItem } = useCart();
 
-  // Get available techniques for this product type
-  const availableTechniques = getAvailableTechniques(productType);
+  // State for techniques loaded from database
+  const [availableTechniques, setAvailableTechniques] = useState<TechniqueOption[]>([]);
+  const [loadingTechniques, setLoadingTechniques] = useState(false);
+
+  /**
+   * Fetch available techniques and placements from database
+   */
+  useEffect(() => {
+    if (!product?.id) return;
+
+    setLoadingTechniques(true);
+
+    fetch(`/api/products/${product.id}/techniques`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.techniques) {
+          setAvailableTechniques(data.techniques);
+
+          // Auto-select default technique if design is present
+          if (designUrl && !selectedTechnique) {
+            const defaultTech = data.techniques.find((t: TechniqueOption) => t.isDefault);
+            if (defaultTech) {
+              console.log(`[Mockup Preview] Auto-selecting default technique:`, defaultTech.value);
+              setSelectedTechnique(defaultTech.value);
+            } else if (data.techniques.length > 0) {
+              // Fallback to first technique if no default
+              console.log(`[Mockup Preview] Auto-selecting first technique:`, data.techniques[0].value);
+              setSelectedTechnique(data.techniques[0].value);
+            }
+          }
+        }
+      })
+      .catch(error => {
+        console.error('[Mockup Preview] Failed to fetch techniques:', error);
+        toast.error('Failed to load printing techniques');
+      })
+      .finally(() => {
+        setLoadingTechniques(false);
+      });
+  }, [product?.id, designUrl]);
 
   /**
    * Convert technical Printful style names to customer-friendly labels
@@ -250,40 +298,37 @@ export function MockupPreview({
       const styles = data.styles || [];
 
       console.log('[Batch Generation] Found', styles.length, 'mockup styles');
-      console.log('[Batch Generation] Available styles:', styles.map(s => `${s.category_name} - ${s.view_name} (${s.placements.length} placements)`));
+      console.log('[Batch Generation] Available styles:', styles.map((s: any) => `${s.category_name} - ${s.view_name} (${s.placements.length} placements)`));
 
-      // Step 2: Build list of all combinations (style × placement) for selected technique
+      // Step 2: Get allowed placements for selected technique from database
+      const selectedTechniqueData = availableTechniques.find(t => t.value === selectedTechnique);
+      if (!selectedTechniqueData || selectedTechniqueData.placements.length === 0) {
+        toast.error('No placements available for this technique');
+        setBatchGenerating(false);
+        return;
+      }
+
+      const allowedPlacements = new Set(
+        selectedTechniqueData.placements.map(p => p.value)
+      );
+
+      console.log('[Batch Generation] Allowed placements for', selectedTechnique, ':', Array.from(allowedPlacements));
+
+      // Step 3: Build list of all combinations (style × placement) for selected technique
       const combinations: Array<{
         styleId: number;
         styleName: string;
         placement: string;
       }> = [];
 
+      // Placements to exclude from batch generation (they require multi-placement requests)
+      const excludedPlacements = new Set(['label_inside', 'label_outside', 'label_inside_dtf']);
+
       for (const style of styles) {
-        // Filter placements that match the selected technique
-        // Use allowlist approach for better accuracy
-        const techniquePlacements = style.placements.filter((p: string) => {
-          if (selectedTechnique === 'embroidery') {
-            // Only embroidery-specific placements
-            return p.startsWith('embroidery_');
-          } else if (selectedTechnique === 'dtfilm') {
-            // Only DTF/DTFilm placements
-            return p.includes('_dtf') || p.includes('_dtfilm');
-          } else if (selectedTechnique === 'dtg') {
-            // DTG uses standard placements - explicit allowlist
-            const dtgPlacements = [
-              'front', 'back', 'left', 'right',
-              'sleeve_left', 'sleeve_right',
-              'front_large', 'back_large',
-              'default'
-            ];
-            return dtgPlacements.includes(p);
-          } else if (selectedTechnique === 'digital') {
-            // Digital printing typically uses default or standard placements
-            return ['default', 'front', 'back'].includes(p);
-          }
-          return false;
-        });
+        // Filter placements that match the allowed placements from database
+        const techniquePlacements = style.placements.filter((p: string) =>
+          allowedPlacements.has(p) && !excludedPlacements.has(p)
+        );
 
         // Add all combinations for this style
         for (const placement of techniquePlacements) {
@@ -366,16 +411,105 @@ export function MockupPreview({
   };
 
   /**
-   * Reset generated mockups when technique changes
+   * Auto-load cached mockups when variant/technique changes
    */
   useEffect(() => {
-    if (generatedMockups.length > 0) {
-      console.log('[Mockup Preview] Technique changed, clearing generated mockups');
-      setGeneratedMockups([]);
-      setGenerationProgress({ current: 0, total: 0 });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTechnique]);
+    const loadCachedMockups = async () => {
+      // Early return if required data is missing
+      if (!productVariantId || !designUrl || !selectedTechnique || !product?.id || availableTechniques.length === 0) {
+        setGeneratedMockups([]);
+        return;
+      }
+
+      console.log('[Mockup Preview] Variant or technique changed, checking for cached mockups...');
+
+      try {
+        // Step 1: Fetch all available mockup styles for this product
+        const response = await fetch(
+          `/api/printful/mockup-styles?printfulProductId=${printfulProductId}`
+        );
+
+        if (!response.ok) {
+          console.error('[Mockup Preview] Failed to fetch mockup styles');
+          return;
+        }
+
+        const data = await response.json();
+        const styles = data.styles || [];
+
+        // Step 2: Get allowed placements for selected technique from database
+        const selectedTechniqueData = availableTechniques.find(t => t.value === selectedTechnique);
+        if (!selectedTechniqueData || selectedTechniqueData.placements.length === 0) {
+          return;
+        }
+
+        const allowedPlacements = new Set(
+          selectedTechniqueData.placements.map(p => p.value)
+        );
+
+        // Step 3: Build list of all combinations (style × placement) for selected technique
+        const excludedPlacements = new Set(['label_inside', 'label_outside', 'label_inside_dtf']);
+
+        const combinations: Array<{
+          styleId: number;
+          styleName: string;
+          placement: string;
+        }> = [];
+
+        for (const style of styles) {
+          const techniquePlacements = style.placements.filter((p: string) =>
+            allowedPlacements.has(p) && !excludedPlacements.has(p)
+          );
+
+          for (const placement of techniquePlacements) {
+            combinations.push({
+              styleId: style.id,
+              styleName: getFriendlyStyleLabel(style.category_name, style.view_name),
+              placement,
+            });
+          }
+        }
+
+        // Step 4: Check sessionStorage cache for each combination
+        const cachedMockups: Array<{
+          styleId: number;
+          styleName: string;
+          placement: string;
+          mockupUrl: string;
+        }> = [];
+
+        for (const combo of combinations) {
+          const cacheKey = `mockup:${productVariantId}:${combo.placement}:style${combo.styleId}:${selectedTechnique}:${designUrl}`;
+          const cachedUrl = sessionStorage.getItem(cacheKey);
+
+          if (cachedUrl) {
+            cachedMockups.push({
+              ...combo,
+              mockupUrl: cachedUrl,
+            });
+          }
+        }
+
+        console.log(`[Mockup Preview] Found ${cachedMockups.length}/${combinations.length} cached mockups`);
+
+        if (cachedMockups.length > 0) {
+          // Load cached mockups
+          setGeneratedMockups(cachedMockups);
+          toast.success(`Loaded ${cachedMockups.length} cached mockup${cachedMockups.length > 1 ? 's' : ''}`, {
+            description: 'Previously generated mockups are ready to view',
+          });
+        } else {
+          // Clear any existing mockups if no cache found
+          setGeneratedMockups([]);
+          console.log('[Mockup Preview] No cached mockups found, user can generate new ones');
+        }
+      } catch (error) {
+        console.error('[Mockup Preview] Error loading cached mockups:', error);
+      }
+    };
+
+    loadCachedMockups();
+  }, [productVariantId, selectedTechnique, designUrl, product?.id, printfulProductId, availableTechniques]);
 
   /**
    * Handle mockup grid item click - open modal for viewing and adding to cart
@@ -613,39 +747,43 @@ export function MockupPreview({
               )}
             </div>
 
-            {/* Grid of mockups */}
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+            {/* List of mockups - one per row */}
+            <div className="space-y-3">
               {generatedMockups.map((mockup, index) => (
                 <Card
                   key={index}
                   className="group cursor-pointer overflow-hidden hover:shadow-lg transition-shadow"
                   onClick={() => handleMockupClick(mockup)}
                 >
-                  <div className="relative aspect-square bg-gray-100">
-                    <Image
-                      src={mockup.mockupUrl}
-                      alt={`${mockup.styleName} - ${mockup.placement}`}
-                      fill
-                      sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                      className="object-cover"
-                    />
-                    {/* Hover overlay with cart icon hint */}
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
-                      <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                        <div className="rounded-full bg-white p-3 shadow-lg">
-                          <ShoppingCart className="h-6 w-6 text-primary" />
-                        </div>
+                  <div className="flex items-center gap-4 p-4">
+                    {/* Mockup image on left */}
+                    <div className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100">
+                      <Image
+                        src={mockup.mockupUrl}
+                        alt={`${mockup.styleName} - ${mockup.placement}`}
+                        fill
+                        sizes="96px"
+                        className="object-cover"
+                      />
+                    </div>
+
+                    {/* Details in center */}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-900 truncate">
+                        {mockup.styleName}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        {getFriendlyPlacementLabel(mockup.placement)}
+                      </p>
+                    </div>
+
+                    {/* Cart icon on right */}
+                    <div className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="rounded-full bg-primary/10 p-2">
+                        <ShoppingCart className="h-5 w-5 text-primary" />
                       </div>
                     </div>
                   </div>
-                  <CardContent className="p-3">
-                    <p className="text-xs font-medium text-gray-900 truncate">
-                      {mockup.styleName}
-                    </p>
-                    <p className="text-xs text-gray-600">
-                      {getFriendlyPlacementLabel(mockup.placement)}
-                    </p>
-                  </CardContent>
                 </Card>
               ))}
             </div>
@@ -654,7 +792,7 @@ export function MockupPreview({
 
         {/* Mockup Detail Drawer */}
         <Drawer open={isModalOpen} onOpenChange={setIsModalOpen}>
-          <DrawerContent className="max-h-[96vh]">
+          <DrawerContent className="max-h-[96vh] max-w-7xl mx-auto w-full">
             <DrawerHeader>
               <DrawerTitle>Mockup Preview</DrawerTitle>
               <DrawerDescription>

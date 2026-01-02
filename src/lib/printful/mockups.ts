@@ -421,6 +421,9 @@ export async function generateMockup(
   } : undefined;
 
   // Build mockup request (v2 format with catalog source)
+  // IMPORTANT: Placements array is ALWAYS required
+  // When using style_id, the style determines the mockup template (flat lay, model, etc.)
+  // but we still specify where to place the design
   const request: MockupRequest = {
     format: 'jpg',
     products: [
@@ -646,8 +649,14 @@ export function getDefaultTechnique(
     return 'digital';
   }
 
-  // Embroidery for stickers and bags (actually these usually use different techniques, but embroidery as fallback)
-  // Note: Most stickers and bags have their own specific placement handling
+  // Digital for stickers, magnets, and other specialty items
+  if (
+    lowerType.includes('sticker') ||
+    lowerType.includes('magnet') ||
+    lowerType.includes('decal')
+  ) {
+    return 'digital';
+  }
 
   // Default to DTG (direct-to-garment) for all apparel
   // This includes: t-shirts, hoodies, sweatshirts, polos, tank tops, long sleeves
@@ -690,8 +699,12 @@ export function mapPlacementForProduct(
     return 'default';
   }
 
-  // Sticker placements - typically use default or front
-  if (lowerType.includes('sticker') || lowerType.includes('decal')) {
+  // Sticker, magnet, and decal placements - typically use default
+  if (
+    lowerType.includes('sticker') ||
+    lowerType.includes('magnet') ||
+    lowerType.includes('decal')
+  ) {
     return 'default';
   }
 

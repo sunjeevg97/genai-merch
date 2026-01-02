@@ -5373,6 +5373,101 @@ Component stores in sessionStorage
 Show mockup
 ```
 
+#### Auto-Loading Cached Mockups
+
+**Feature**: Automatically loads previously generated mockups when viewing product detail pages or changing variants.
+
+**How It Works**:
+- When `productVariantId`, `selectedTechnique`, or `designUrl` changes, a `useEffect` hook triggers
+- Checks `sessionStorage` for cached mockups matching the current variant + technique + design combination
+- If cached mockups exist → loads them instantly with success toast notification
+- If no cached mockups exist → shows "Generate Images" button for manual generation
+
+**Benefits**:
+1. **Instant Load Times**: Previously generated mockups appear immediately without regeneration
+2. **Seamless Variant Switching**: Change size/color and see cached mockups if available
+3. **Improved UX**: Customers don't wait for regeneration when viewing products they've already customized
+4. **Session Persistence**: Cache survives within the same browser session
+
+**Implementation** (`mockup-preview.tsx:413-512`):
+```typescript
+useEffect(() => {
+  const loadCachedMockups = async () => {
+    // Early return if required data is missing
+    if (!productVariantId || !designUrl || !selectedTechnique || !product?.id || availableTechniques.length === 0) {
+      setGeneratedMockups([]);
+      return;
+    }
+
+    console.log('[Mockup Preview] Variant or technique changed, checking for cached mockups...');
+
+    try {
+      // Fetch available mockup styles for this product
+      const response = await fetch(`/api/printful/mockup-styles?printfulProductId=${printfulProductId}`);
+      const data = await response.json();
+      const styles = data.styles || [];
+
+      // Build combinations of style × placement for selected technique
+      const combinations = [...]; // Logic to build combinations
+
+      // Check sessionStorage cache for each combination
+      const cachedMockups = [];
+      for (const combo of combinations) {
+        const cacheKey = `mockup:${productVariantId}:${combo.placement}:style${combo.styleId}:${selectedTechnique}:${designUrl}`;
+        const cachedUrl = sessionStorage.getItem(cacheKey);
+
+        if (cachedUrl) {
+          cachedMockups.push({ ...combo, mockupUrl: cachedUrl });
+        }
+      }
+
+      if (cachedMockups.length > 0) {
+        // Load cached mockups instantly
+        setGeneratedMockups(cachedMockups);
+        toast.success(`Loaded ${cachedMockups.length} cached mockup${cachedMockups.length > 1 ? 's' : ''}`, {
+          description: 'Previously generated mockups are ready to view',
+        });
+      } else {
+        // Clear display, user can generate new ones
+        setGeneratedMockups([]);
+      }
+    } catch (error) {
+      console.error('[Mockup Preview] Error loading cached mockups:', error);
+    }
+  };
+
+  loadCachedMockups();
+}, [productVariantId, selectedTechnique, designUrl, product?.id, printfulProductId, availableTechniques]);
+```
+
+**User Flow Example**:
+```
+1. Customer selects "Unisex Classic Tee" + Design + Size M + Black
+   → Auto-selects DTG technique
+   → Checks cache → No mockups found
+   → Shows "Generate Images" button
+
+2. Customer clicks "Generate Images"
+   → Generates 4 mockups (front, back, sleeve_left, sleeve_right)
+   → Stores in sessionStorage
+
+3. Customer changes to Size L + White
+   → productVariantId changes
+   → Auto-checks cache for new variant
+   → No cached mockups for this variant
+   → Shows "Generate Images" button
+
+4. Customer generates mockups for Size L
+   → Stores in sessionStorage
+
+5. Customer switches back to Size M + Black
+   → productVariantId changes back
+   → Auto-checks cache
+   → Cache HIT! Loads 4 mockups instantly
+   → Toast: "Loaded 4 cached mockups"
+   → Customer sees mockups immediately (no regeneration)
+```
+
 #### Usage Example
 
 ```typescript

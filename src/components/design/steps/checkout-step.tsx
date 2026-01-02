@@ -7,6 +7,7 @@
 'use client';
 
 import { useCart } from '@/lib/cart/store';
+import { useDesignWizard } from '@/lib/store/design-wizard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -16,6 +17,7 @@ import Image from 'next/image';
 
 export function CheckoutStep() {
   const { items, subtotal, itemCount } = useCart();
+  const { previousStep } = useDesignWizard();
 
   const formatPrice = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
@@ -26,6 +28,12 @@ export function CheckoutStep() {
 
   return (
     <div className="space-y-8">
+      {/* Back Button */}
+      <Button variant="ghost" size="sm" className="group" onClick={previousStep}>
+        <ArrowLeft className="mr-2 h-4 w-4 transition-transform group-hover:-translate-x-1" />
+        Back to Product Selection
+      </Button>
+
       {/* Header */}
       <div className="space-y-2">
         <h2 className="text-3xl font-bold">Review & Checkout</h2>

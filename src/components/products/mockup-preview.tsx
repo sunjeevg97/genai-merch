@@ -64,7 +64,7 @@ export function MockupPreview({
   selectedVariant,
   design,
 }: MockupPreviewProps) {
-  const [selectedTechnique, setSelectedTechnique] = useState<'dtg' | 'dtfilm' | 'embroidery' | 'sublimation' | undefined>(undefined);
+  const [selectedTechnique, setSelectedTechnique] = useState<'dtg' | 'dtfilm' | 'embroidery' | 'digital' | undefined>(undefined);
   const [batchGenerating, setBatchGenerating] = useState(false);
   const [generatedMockups, setGeneratedMockups] = useState<Array<{
     styleId: number;
@@ -278,8 +278,8 @@ export function MockupPreview({
               'default'
             ];
             return dtgPlacements.includes(p);
-          } else if (selectedTechnique === 'sublimation') {
-            // Sublimation typically uses default or standard placements
+          } else if (selectedTechnique === 'digital') {
+            // Digital printing typically uses default or standard placements
             return ['default', 'front', 'back'].includes(p);
           }
           return false;

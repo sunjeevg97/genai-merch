@@ -87,6 +87,9 @@ export function ProductShowcaseStep() {
     complete,
   } = useDesignWizard();
 
+  // Cart state - must be called before any conditional returns
+  const { items, subtotal, itemCount, removeItem, updateQuantity } = useCart();
+
   const [products, setProducts] = useState<ProductWithVariants[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<ProductWithVariants[]>([]);
   const [loading, setLoading] = useState(true);
@@ -234,7 +237,6 @@ export function ProductShowcaseStep() {
   }
 
   const counts = getCategoryCounts();
-  const { items, subtotal, itemCount, removeItem, updateQuantity } = useCart();
 
   const formatPrice = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 

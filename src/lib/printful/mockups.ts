@@ -25,7 +25,7 @@
  *    - Embroidery placements: embroidery_front, embroidery_front_large, embroidery_back, embroidery_left, embroidery_right
  *
  * 3. MUGS & CUPS:
- *    - Technique: Sublimation
+ *    - Technique: Digital (sublimation)
  *    - Placements: default (wraps around the mug)
  *
  * 4. STICKERS:
@@ -100,7 +100,7 @@ export interface MockupRequest {
     style_id?: number; // Optional mockup style (flat lay, model, hanger, etc.)
     placements: Array<{
       placement: string;
-      technique: 'dtg' | 'dtfilm' | 'embroidery' | 'sublimation';
+      technique: 'dtg' | 'dtfilm' | 'embroidery' | 'digital';
       layers: Array<{
         type: 'file';
         url: string;
@@ -322,7 +322,7 @@ export function generateMockupCacheKey(
   placement: MockupPlacement = 'front',
   position?: MockupPosition,
   styleId?: number,
-  technique?: 'dtg' | 'dtfilm' | 'embroidery' | 'sublimation'
+  technique?: 'dtg' | 'dtfilm' | 'embroidery' | 'digital'
 ): string {
   // Include position data in hash if provided
   const positionStr = position
@@ -364,7 +364,7 @@ export async function generateMockup(
   placement: MockupPlacement = 'front',
   position?: MockupPosition,
   styleId?: number,
-  technique?: 'dtg' | 'dtfilm' | 'embroidery' | 'sublimation'
+  technique?: 'dtg' | 'dtfilm' | 'embroidery' | 'digital'
 ): Promise<MockupResult> {
   // Debug logging
   console.log('[generateMockup] Parameters:', {
@@ -539,7 +539,7 @@ export async function generateMockup(
  */
 export function getAvailableTechniques(
   productType: string
-): Array<{ value: 'dtg' | 'dtfilm' | 'embroidery' | 'sublimation'; label: string; description: string }> {
+): Array<{ value: 'dtg' | 'dtfilm' | 'embroidery' | 'digital'; label: string; description: string }> {
   const lowerType = productType.toLowerCase();
 
   // Hats/Caps - Support both DTFilm and Embroidery
@@ -562,25 +562,25 @@ export function getAvailableTechniques(
     ];
   }
 
-  // Mugs/Cups - Sublimation only
+  // Mugs/Cups - Digital printing (sublimation)
   if (
     lowerType.includes('mug') ||
     lowerType.includes('cup')
   ) {
     return [
       {
-        value: 'sublimation',
-        label: 'Sublimation',
+        value: 'digital',
+        label: 'Digital Print',
         description: 'Vibrant, permanent print'
       }
     ];
   }
 
-  // Stickers - Sublimation
+  // Stickers - Digital printing
   if (lowerType.includes('sticker')) {
     return [
       {
-        value: 'sublimation',
+        value: 'digital',
         label: 'Full Color Print',
         description: 'High-quality digital print'
       }
@@ -604,7 +604,7 @@ export function getAvailableTechniques(
  */
 export function getTechniqueFromPlacement(
   placement: string
-): 'dtg' | 'dtfilm' | 'embroidery' | 'sublimation' {
+): 'dtg' | 'dtfilm' | 'embroidery' | 'digital' {
   const lowerPlacement = placement.toLowerCase();
 
   // Embroidery placements
@@ -617,9 +617,9 @@ export function getTechniqueFromPlacement(
     return 'dtfilm';
   }
 
-  // Sublimation for default (usually mugs)
+  // Digital for default (usually mugs, sublimation products)
   if (lowerPlacement === 'default') {
-    return 'sublimation';
+    return 'digital';
   }
 
   // Default to DTG for standard placements (front, back, sleeve_left, etc.)
@@ -633,7 +633,7 @@ export function getTechniqueFromPlacement(
  */
 export function getDefaultTechnique(
   productType: string
-): 'dtg' | 'dtfilm' | 'embroidery' | 'sublimation' {
+): 'dtg' | 'dtfilm' | 'embroidery' | 'digital' {
   const lowerType = productType.toLowerCase();
 
   // DTFilm for hats (faster than embroidery)
@@ -641,9 +641,9 @@ export function getDefaultTechnique(
     return 'dtfilm';
   }
 
-  // Sublimation for mugs, cups, and all-over prints
+  // Digital for mugs, cups, and all-over prints (formerly sublimation)
   if (lowerType.includes('mug') || lowerType.includes('cup') || lowerType.includes('all-over')) {
-    return 'sublimation';
+    return 'digital';
   }
 
   // Embroidery for stickers and bags (actually these usually use different techniques, but embroidery as fallback)
@@ -662,7 +662,7 @@ export function getDefaultTechnique(
 export function mapPlacementForProduct(
   placement: MockupPlacement,
   productType: string,
-  technique: 'dtg' | 'dtfilm' | 'embroidery' | 'sublimation'
+  technique: 'dtg' | 'dtfilm' | 'embroidery' | 'digital'
 ): string {
   const lowerType = productType.toLowerCase();
 

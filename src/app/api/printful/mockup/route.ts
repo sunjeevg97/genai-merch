@@ -67,7 +67,7 @@ const mockupRequestSchema = z.object({
     left: z.number().min(0),
   }).optional(),
   styleId: z.number().positive().optional(),
-  technique: z.enum(['dtg', 'dtfilm', 'embroidery', 'sublimation']).optional(),
+  technique: z.enum(['dtg', 'dtfilm', 'embroidery', 'digital']).optional(),
 });
 
 /**

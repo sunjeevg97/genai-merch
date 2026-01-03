@@ -6,18 +6,22 @@
 
 'use client';
 
+import { useState } from 'react';
 import { useCart } from '@/lib/cart/store';
 import { useDesignWizard } from '@/lib/store/design-wizard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { ShoppingCart, CreditCard, Package, Truck, ArrowLeft } from 'lucide-react';
+import { ShoppingCart, CreditCard, Package, Truck, ArrowLeft, Loader2 } from 'lucide-react';
 import Image from 'next/image';
+import { createCheckoutSession, redirectToCheckout } from '@/lib/stripe/client';
+import { toast } from 'sonner';
 
 export function CheckoutStep() {
   const { items, subtotal, itemCount } = useCart();
   const { previousStep } = useDesignWizard();
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const formatPrice = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
@@ -25,6 +29,46 @@ export function CheckoutStep() {
   const estimatedShipping = 599; // $5.99
   const estimatedTax = Math.round(subtotal * 0.08); // 8% tax
   const total = subtotal + estimatedShipping + estimatedTax;
+
+  /**
+   * Handle checkout - create Stripe session and redirect
+   */
+  const handleCheckout = async () => {
+    if (items.length === 0) {
+      toast.error('Your cart is empty');
+      return;
+    }
+
+    setIsProcessing(true);
+
+    try {
+      console.log('[Checkout] Creating Stripe session...');
+
+      // Create checkout session
+      const { sessionId, sessionUrl, orderId, orderNumber } = await createCheckoutSession({
+        items,
+      });
+
+      console.log('[Checkout] Session created:', { sessionId, orderId, orderNumber });
+
+      toast.success('Redirecting to checkout...', {
+        description: `Order ${orderNumber} created`,
+      });
+
+      // Redirect to Stripe Checkout
+      await redirectToCheckout(sessionUrl);
+
+      // Note: We don't clear cart here - it will be cleared on success page
+    } catch (error) {
+      console.error('[Checkout] Error:', error);
+
+      toast.error('Checkout failed', {
+        description: error instanceof Error ? error.message : 'Please try again',
+      });
+
+      setIsProcessing(false);
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -160,14 +204,28 @@ export function CheckoutStep() {
                   <span className="text-lg font-bold">{formatPrice(total)}</span>
                 </div>
 
-                {/* Checkout Button (Placeholder) */}
-                <Button className="w-full" size="lg" disabled>
-                  <CreditCard className="mr-2 h-5 w-5" />
-                  Proceed to Payment (Coming Soon)
+                {/* Checkout Button */}
+                <Button
+                  className="w-full"
+                  size="lg"
+                  onClick={handleCheckout}
+                  disabled={isProcessing || items.length === 0}
+                >
+                  {isProcessing ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className="mr-2 h-5 w-5" />
+                      Proceed to Payment
+                    </>
+                  )}
                 </Button>
 
                 <p className="text-center text-xs text-muted-foreground">
-                  Stripe checkout integration coming soon
+                  Secure payment processing powered by Stripe
                 </p>
               </CardContent>
             </Card>

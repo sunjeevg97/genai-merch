@@ -2032,6 +2032,497 @@ const handleAddToCart = () => {
 
 ---
 
+## Stripe Checkout Integration
+
+GenAI-Merch uses Stripe Checkout for secure payment processing. The checkout flow creates orders in the database with PENDING_PAYMENT status, generates a Stripe checkout session with automatic tax calculation and shipping options, and redirects users to Stripe's hosted checkout page.
+
+### Checkout Flow Overview
+
+**Complete User Journey**:
+1. User adds items to cart (with optional custom designs)
+2. User navigates to checkout step in wizard or `/cart` page
+3. User reviews order summary (items, estimated shipping, estimated tax)
+4. User clicks "Proceed to Payment"
+5. System creates Order in database with PENDING_PAYMENT status
+6. System creates Stripe Checkout Session with order metadata
+7. User redirects to Stripe Checkout (hosted page)
+8. User enters shipping address and selects shipping method
+9. User enters payment information
+10. Stripe processes payment and calculates final shipping + tax
+11. User redirects to success page with order confirmation
+12. Cart is automatically cleared
+13. Order status updates via Stripe webhooks (future)
+
+**Key Architecture Components**:
+- `POST /api/stripe/create-checkout` - Creates checkout session and order
+- `GET /api/stripe/session/[sessionId]` - Retrieves session details for success page
+- `src/lib/stripe/client.ts` - Client-side Stripe helpers
+- `src/components/design/steps/checkout-step.tsx` - Checkout review page
+- `src/app/checkout/success/page.tsx` - Order confirmation page
+
+### Order Lifecycle
+
+**Order Status Flow**:
+```
+PENDING_PAYMENT → PAID → SUBMITTED_TO_POD → IN_PRODUCTION → SHIPPED → DELIVERED
+     ↓              ↓
+ CANCELLED     REFUNDED
+```
+
+**Status Definitions**:
+- `PENDING_PAYMENT`: Order created, awaiting Stripe payment
+- `PAID`: Payment confirmed by Stripe (via webhook)
+- `SUBMITTED_TO_POD`: Order submitted to Printful for fulfillment
+- `IN_PRODUCTION`: Printful is manufacturing the order
+- `SHIPPED`: Order shipped, tracking number available
+- `DELIVERED`: Order delivered to customer
+- `CANCELLED`: Order cancelled before payment or fulfillment
+- `REFUNDED`: Payment refunded after completion
+
+**Order Metadata**:
+- `orderNumber`: Unique identifier (format: ORD-YYYYMMDD-XXXX)
+- `stripeCheckoutSessionId`: Stripe session ID for tracking
+- `stripePaymentIntentId`: Stripe payment intent (set by webhook)
+- `printfulOrderId`: Printful order ID (set when submitted)
+- Pricing: `subtotal`, `shipping`, `tax`, `total` (all in cents)
+- Timestamps: `createdAt`, `paidAt`, `shippedAt`, `deliveredAt`
+
+### Stripe Checkout API Route
+
+**Location**: `src/app/api/stripe/create-checkout/route.ts`
+
+**Request** (`POST /api/stripe/create-checkout`):
+```json
+{
+  "items": [
+    {
+      "id": "cart-item-id",
+      "productVariantId": "variant-uuid",
+      "product": {
+        "name": "Bella Canvas 3001 T-Shirt",
+        "imageUrl": "https://...",
+        "productType": "t-shirt"
+      },
+      "variant": {
+        "name": "Medium / Black",
+        "size": "M",
+        "color": "Black"
+      },
+      "design": {
+        "id": "design-uuid",
+        "imageUrl": "https://...",
+        "thumbnailUrl": "https://..."
+      },
+      "mockupConfig": {
+        "mockupUrl": "https://printful-mockup.jpg",
+        "technique": "dtg",
+        "placement": "front",
+        "styleId": 123,
+        "styleName": "Men's T-Shirt"
+      },
+      "quantity": 2,
+      "unitPrice": 2299
+    }
+  ],
+  "successUrl": "https://example.com/checkout/success",
+  "cancelUrl": "https://example.com/cart"
+}
+```
+
+**Response**:
+```json
+{
+  "sessionId": "cs_test_...",
+  "sessionUrl": "https://checkout.stripe.com/c/pay/...",
+  "orderId": "order-uuid",
+  "orderNumber": "ORD-20260102-ABCD"
+}
+```
+
+**Processing Steps**:
+1. **Validate Request**: Zod schema validation for all fields
+2. **Check Stock**: Verify all product variants are in stock
+3. **Verify Prices**: Security check - ensure prices haven't changed
+4. **Calculate Totals**: Sum all item prices (shipping/tax calculated by Stripe)
+5. **Generate Order Number**: Unique format ORD-YYYYMMDD-XXXX
+6. **Create Order**: Insert into database with PENDING_PAYMENT status
+7. **Create Stripe Session**: With shipping options, automatic tax, line items
+8. **Update Order**: Store Stripe session ID
+9. **Log Status**: Create OrderStatusHistory entry
+10. **Return Response**: Session ID and URL for redirect
+
+**Stripe Session Configuration**:
+- **Mode**: `payment` (one-time payment)
+- **Line Items**: Product name, variant, price, quantity, custom design info
+- **Shipping Address Collection**: Enabled for 8 countries (US, CA, GB, etc.)
+- **Shipping Options**:
+  - Standard: $5.99 (5-10 business days)
+  - Express: $12.99 (2-3 business days)
+- **Automatic Tax**: Enabled (Stripe calculates based on shipping address)
+- **Payment Intent Metadata**: `order_id`, `order_number`, `user_id`
+- **Session Expiration**: 30 minutes
+- **Idempotency Key**: `checkout_{order_id}` (prevents duplicate sessions)
+
+**Error Handling**:
+- `400 Bad Request`: Invalid input, product not found, out of stock, price mismatch
+- `404 Not Found`: Product variant not found in database
+- `500 Internal Server Error`: Stripe API error, database error
+
+### Stripe Client Helpers
+
+**Location**: `src/lib/stripe/client.ts`
+
+**Functions**:
+
+1. **`getStripe()`** - Singleton Stripe.js instance
+   ```typescript
+   const stripe = await getStripe();
+   ```
+
+2. **`createCheckoutSession(request)`** - Create checkout session
+   ```typescript
+   const { sessionId, sessionUrl, orderId, orderNumber } =
+     await createCheckoutSession({ items });
+   ```
+
+3. **`redirectToCheckout(sessionUrl)`** - Redirect to Stripe Checkout
+   ```typescript
+   await redirectToCheckout(sessionUrl);
+   // Redirects user to Stripe's hosted checkout page
+   ```
+
+4. **`retrieveCheckoutSession(sessionId)`** - Get session details
+   ```typescript
+   const data = await retrieveCheckoutSession(sessionId);
+   // Returns { session, order } with full details
+   ```
+
+5. **`formatPrice(cents)`** - Format cents to currency string
+   ```typescript
+   formatPrice(2299); // "$22.99"
+   ```
+
+### Session Retrieval API Route
+
+**Location**: `src/app/api/stripe/session/[sessionId]/route.ts`
+
+**Request** (`GET /api/stripe/session/{sessionId}`):
+```
+GET /api/stripe/session/cs_test_abc123
+```
+
+**Response**:
+```json
+{
+  "session": {
+    "id": "cs_test_abc123",
+    "status": "complete",
+    "amount_total": 3498,
+    "currency": "usd",
+    "customer_email": "user@example.com",
+    "customer_name": "John Doe",
+    "shipping": {
+      "amount": 599,
+      "name": "standard_shipping"
+    },
+    "shipping_details": {
+      "name": "John Doe",
+      "address": {
+        "line1": "123 Main St",
+        "line2": null,
+        "city": "Los Angeles",
+        "state": "CA",
+        "postal_code": "90001",
+        "country": "US"
+      }
+    },
+    "tax": 199
+  },
+  "order": {
+    "id": "order-uuid",
+    "orderNumber": "ORD-20260102-ABCD",
+    "status": "PENDING_PAYMENT",
+    "subtotal": 2299,
+    "shipping": 599,
+    "tax": 199,
+    "total": 3097,
+    "currency": "USD",
+    "createdAt": "2026-01-02T10:30:00Z",
+    "items": [
+      {
+        "id": "item-uuid",
+        "productName": "Bella Canvas 3001 T-Shirt",
+        "variantName": "Medium / Black",
+        "quantity": 1,
+        "unitPrice": 2299,
+        "thumbnailUrl": "https://mockup.jpg",
+        "customization": {
+          "technique": "dtg",
+          "placement": "front",
+          "mockupUrl": "https://...",
+          "designUrl": "https://..."
+        }
+      }
+    ],
+    "shippingAddress": {
+      "name": "John Doe",
+      "address1": "123 Main St",
+      "city": "Los Angeles",
+      "stateCode": "CA",
+      "zip": "90001",
+      "countryCode": "US"
+    }
+  }
+}
+```
+
+**Purpose**: Used by success page to display order confirmation with accurate shipping and tax amounts calculated by Stripe.
+
+### Checkout Step Component
+
+**Location**: `src/components/design/steps/checkout-step.tsx`
+
+**Features**:
+- **Order Review**: Display all cart items with images, variants, quantities
+- **Mockup Preview**: Show generated mockups if available
+- **Price Breakdown**: Subtotal, estimated shipping, estimated tax, total
+- **Shipping Info**: Collected during Stripe Checkout (not on this page)
+- **Secure Badge**: "Secure payment processing powered by Stripe"
+- **What's Next Card**: Expected timeline for order fulfillment
+
+**User Flow**:
+1. User clicks "Proceed to Payment" button
+2. Button shows "Processing..." loading state
+3. `createCheckoutSession()` called with cart items
+4. Toast notification: "Redirecting to checkout... Order {number} created"
+5. `redirectToCheckout(sessionUrl)` redirects to Stripe
+6. User completes payment on Stripe's hosted page
+7. Stripe redirects to `/checkout/success?session_id={id}`
+
+**Error Handling**:
+- Empty cart: Show error toast, don't proceed
+- API errors: Show toast with error message, re-enable button
+- Network errors: Show generic "Please try again" message
+
+### Success Page
+
+**Location**: `src/app/checkout/success/page.tsx`
+
+**Features**:
+- **Success Icon**: Green checkmark with confirmation message
+- **Order Number**: Display prominent order number
+- **Order Items**: List of all purchased items with images
+- **Shipping Address**: Customer's shipping destination
+- **Price Breakdown**: Final subtotal, shipping, tax, total (from Stripe)
+- **Action Buttons**: "Continue Shopping" and "Track Order"
+- **Email Confirmation Notice**: Assurance email is sent
+
+**Data Flow**:
+1. Extract `session_id` from URL query params
+2. Call `/api/stripe/session/{sessionId}` to get full details
+3. Display order information from database + Stripe session
+4. **Clear cart** using `clearCart()` from Zustand store
+5. Show success toast notification
+6. If session_id missing or API fails, show error state
+
+**Error States**:
+- **No Session ID**: "Please complete checkout first"
+- **Order Not Found**: "Order not found in database"
+- **API Error**: "Failed to load order details"
+- All errors show "Continue Shopping" button
+
+### Integration Patterns
+
+**Pattern 1: Create Session + Redirect**
+```typescript
+// In checkout component
+const handleCheckout = async () => {
+  const { sessionUrl, orderNumber } = await createCheckoutSession({ items });
+  toast.success(`Order ${orderNumber} created`);
+  await redirectToCheckout(sessionUrl);
+};
+```
+
+**Pattern 2: Retrieve Session on Success Page**
+```typescript
+// In success page
+useEffect(() => {
+  const sessionId = searchParams.get('session_id');
+  const { session, order } = await retrieveCheckoutSession(sessionId);
+  setOrderDetails(order);
+  clearCart(); // Clear cart after successful order
+}, []);
+```
+
+**Pattern 3: Guest Checkout Support**
+```typescript
+// API route handles both authenticated and guest users
+const user = await getUser(); // May be null
+const userId = user?.id || undefined;
+
+// Order created with optional user relation
+const orderData: any = { /* ... */ };
+if (userId) {
+  orderData.user = { connect: { id: userId } };
+}
+const order = await prisma.order.create({ data: orderData });
+```
+
+### Security Measures
+
+**1. Price Verification**:
+```typescript
+// Verify client-sent prices match database prices
+if (variant.price !== item.unitPrice) {
+  return NextResponse.json({
+    error: 'Price mismatch',
+    message: 'Price has changed. Please refresh your cart.'
+  }, { status: 400 });
+}
+```
+
+**2. Stock Validation**:
+```typescript
+// Check inventory before creating order
+if (!variant.inStock) {
+  return NextResponse.json({
+    error: 'Product out of stock'
+  }, { status: 400 });
+}
+```
+
+**3. Idempotency**:
+```typescript
+// Prevent duplicate checkout sessions
+const session = await stripe.checkout.sessions.create(
+  { /* ... */ },
+  { idempotencyKey: `checkout_${order.id}` }
+);
+```
+
+**4. Input Validation**:
+```typescript
+// Zod schema validation on all API inputs
+const validation = checkoutRequestSchema.safeParse(body);
+if (!validation.success) {
+  return NextResponse.json({
+    error: 'Invalid request',
+    details: validation.error.issues
+  }, { status: 400 });
+}
+```
+
+**5. Metadata Tracking**:
+```typescript
+// Store order ID in Stripe for reconciliation
+metadata: {
+  order_id: order.id,
+  order_number: orderNumber,
+  user_id: userId || 'guest'
+}
+```
+
+### Testing Checklist
+
+**Complete Checkout Flow**:
+- [ ] Add items to cart (authenticated user)
+- [ ] Add items to cart (guest user)
+- [ ] Navigate to checkout step
+- [ ] Verify order summary displays correctly
+- [ ] Click "Proceed to Payment"
+- [ ] Verify redirect to Stripe Checkout
+- [ ] Complete test payment with Stripe test card: `4242 4242 4242 4242`
+- [ ] Verify redirect to success page with correct order details
+- [ ] Verify cart is cleared after successful checkout
+- [ ] Verify order exists in database with PENDING_PAYMENT status
+- [ ] Verify OrderStatusHistory entry created
+
+**Error Scenarios**:
+- [ ] Empty cart → Cannot proceed to checkout
+- [ ] Out of stock product → Error message shown
+- [ ] Price mismatch → Error message shown
+- [ ] Network error → User-friendly error message
+- [ ] Cancel payment on Stripe → Redirect to `/cart`, order remains PENDING
+- [ ] Invalid session_id on success page → Error state shown
+
+**Edge Cases**:
+- [ ] Multiple items with different variants
+- [ ] Items with custom designs + mockups
+- [ ] Items without custom designs
+- [ ] Guest checkout (no user account)
+- [ ] Expired Stripe session (30 min timeout)
+- [ ] Browser back button from Stripe checkout page
+
+**Database Verification**:
+```sql
+-- Verify order created correctly
+SELECT * FROM "Order" WHERE "orderNumber" = 'ORD-20260102-ABCD';
+
+-- Check order items
+SELECT * FROM "OrderItem" WHERE "orderId" = 'order-uuid';
+
+-- Verify status history
+SELECT * FROM "OrderStatusHistory"
+WHERE "orderId" = 'order-uuid'
+ORDER BY "createdAt" DESC;
+```
+
+### Future Enhancements
+
+**Stripe Webhooks** (High Priority):
+- Listen for `checkout.session.completed` event
+- Update Order status to PAID when payment succeeds
+- Save shipping address from Stripe to database
+- Update order totals with final shipping + tax amounts
+- Send order confirmation email via Resend
+- Submit order to Printful for fulfillment
+
+**Order Tracking**:
+- `/orders/[orderId]` page showing real-time status
+- Printful webhook integration for status updates
+- Email notifications for status changes
+- Tracking number display with carrier links
+
+**Advanced Features**:
+- Save payment methods for faster checkout
+- Address book for returning customers
+- Order history page showing all past orders
+- Reorder functionality (add previous order to cart)
+- Gift options and messages
+- Discount codes and promotions
+
+### Troubleshooting
+
+**Issue: "Stripe failed to load"**
+- Check `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` is set in `.env.local`
+- Verify environment variable starts with `pk_test_` or `pk_live_`
+- Clear browser cache and reload
+
+**Issue: "Failed to create checkout session"**
+- Check `STRIPE_SECRET_KEY` is set in server environment
+- Verify API version matches: `2025-12-15.clover`
+- Check server logs for detailed Stripe error messages
+- Verify product variants have valid printfulVariantId
+
+**Issue: Order created but payment not processing**
+- This is expected - order is created BEFORE payment
+- Status will be PENDING_PAYMENT until Stripe webhook confirms payment
+- Future webhook integration will update status to PAID
+
+**Issue: Cart not clearing after successful checkout**
+- Verify `clearCart()` is called in success page useEffect
+- Check browser console for JavaScript errors
+- Ensure Zustand store is properly initialized
+- Try clearing localStorage: `localStorage.removeItem('genai-merch-cart')`
+
+**Issue: Success page shows "Order Not Found"**
+- Verify session_id is in URL query params
+- Check order was created in database (query by session ID)
+- Verify `/api/stripe/session/[sessionId]` route is working
+- Check server logs for database errors
+
+---
+
 ## Key Features & Modules
 
 ### 1. AI Design Generation

@@ -1,16 +1,17 @@
 /**
  * Checkout Button Component
  *
- * Handles checkout flow initiation.
+ * Handles checkout flow initiation with Stripe.
  */
 
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { ShoppingBag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { useCart } from '@/lib/cart/store';
+import { createCheckoutSession, redirectToCheckout } from '@/lib/stripe/client';
 
 interface CheckoutButtonProps {
   disabled?: boolean;
@@ -19,7 +20,7 @@ interface CheckoutButtonProps {
 }
 
 export function CheckoutButton({ disabled, itemCount, subtotal }: CheckoutButtonProps) {
-  const router = useRouter();
+  const { items } = useCart();
   const [isProcessing, setIsProcessing] = useState(false);
 
   const handleCheckout = async () => {
@@ -31,20 +32,27 @@ export function CheckoutButton({ disabled, itemCount, subtotal }: CheckoutButton
     setIsProcessing(true);
 
     try {
-      // TODO: Implement checkout flow
-      // For now, just show a coming soon message
-      toast.info('Checkout coming soon!', {
-        description: 'We are working on the checkout process.',
+      console.log('[Checkout Button] Creating Stripe session...', { itemCount, subtotal });
+
+      // Create checkout session with cart items
+      const { sessionId, sessionUrl, orderId, orderNumber } = await createCheckoutSession({
+        items,
       });
 
-      // Future implementation:
-      // 1. Create checkout session
-      // 2. Redirect to Stripe checkout or custom checkout page
-      // router.push('/checkout');
+      console.log('[Checkout Button] Session created:', { sessionId, orderId, orderNumber });
+
+      toast.success('Redirecting to checkout...', {
+        description: `Order ${orderNumber} created`,
+      });
+
+      // Redirect to Stripe Checkout
+      await redirectToCheckout(sessionUrl);
+
+      // Note: Cart will be cleared on the success page after payment confirmation
     } catch (error) {
-      console.error('Checkout error:', error);
+      console.error('[Checkout Button] Error:', error);
       toast.error('Failed to proceed to checkout', {
-        description: 'Please try again or contact support.',
+        description: error instanceof Error ? error.message : 'Please try again',
       });
     } finally {
       setIsProcessing(false);

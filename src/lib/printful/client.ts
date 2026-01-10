@@ -44,11 +44,8 @@ export class PrintfulClient {
     // Support both PRINTFUL_API_KEY (newer) and PRINTFUL_API_TOKEN (legacy)
     this.apiToken = apiToken || process.env.PRINTFUL_API_KEY || process.env.PRINTFUL_API_TOKEN || '';
 
-    if (!this.apiToken) {
-      throw new Error(
-        'Printful API token is required. Set PRINTFUL_API_KEY environment variable.'
-      );
-    }
+    // Note: We don't throw here to allow the module to be imported during build time
+    // The token will be validated when making actual API calls
 
     // Configure rate limiter: 120 requests per minute
     this.limiter = new Bottleneck({
@@ -94,6 +91,13 @@ export class PrintfulClient {
     endpoint: string,
     body?: unknown
   ): Promise<PrintfulApiResponse<T>> {
+    // Validate API token is present before making requests
+    if (!this.apiToken) {
+      throw new Error(
+        'Printful API token is required. Set PRINTFUL_API_KEY environment variable.'
+      );
+    }
+
     const url = `${this.baseUrl}${endpoint}`;
     const startTime = Date.now();
 

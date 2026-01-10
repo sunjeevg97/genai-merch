@@ -10,10 +10,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { prisma } from '@/lib/prisma';
 
-// Initialize Stripe
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-12-15.clover',
-});
+// Initialize Stripe (lazy-loaded to avoid build-time errors)
+function getStripe() {
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+  if (!secretKey) {
+    throw new Error('STRIPE_SECRET_KEY environment variable is not set');
+  }
+  return new Stripe(secretKey, {
+    apiVersion: '2025-12-15.clover',
+  });
+}
 
 export async function GET(
   _request: NextRequest,
@@ -25,6 +31,7 @@ export async function GET(
     console.log('[Stripe Session] Retrieving session:', sessionId);
 
     // Step 1: Retrieve session from Stripe
+    const stripe = getStripe();
     const session = await stripe.checkout.sessions.retrieve(sessionId, {
       expand: ['customer', 'payment_intent', 'line_items', 'shipping_cost', 'total_details'],
     });

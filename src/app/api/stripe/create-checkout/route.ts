@@ -13,10 +13,16 @@ import { prisma } from '@/lib/prisma';
 import { getUser } from '@/lib/supabase/server';
 import { z } from 'zod';
 
-// Initialize Stripe
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-12-15.clover',
-});
+// Initialize Stripe (lazy-loaded to avoid build-time errors)
+function getStripe() {
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+  if (!secretKey) {
+    throw new Error('STRIPE_SECRET_KEY environment variable is not set');
+  }
+  return new Stripe(secretKey, {
+    apiVersion: '2025-12-15.clover',
+  });
+}
 
 /**
  * Request validation schema
@@ -221,6 +227,7 @@ export async function POST(request: NextRequest) {
 
     // Step 5: Create Stripe checkout session
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const stripe = getStripe();
 
     const session = await stripe.checkout.sessions.create(
       {

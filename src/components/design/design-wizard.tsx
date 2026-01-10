@@ -9,10 +9,13 @@
  * 5. Checkout
  *
  * Handles step navigation, progress indication, and transitions.
+ * Supports direct navigation via query parameter (?step=X).
  */
 
 'use client';
 
+import { useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useDesignWizard, WizardStep } from '@/lib/store/design-wizard';
 import { EventTypeStep } from '@/components/design/steps/event-type-step';
 import { EventDetailsStep } from '@/components/design/steps/event-details-step';
@@ -48,7 +51,34 @@ const STEPS: StepConfig[] = [
  * ```
  */
 export function DesignWizard() {
-  const { currentStep } = useDesignWizard();
+  const { currentStep, goToStep } = useDesignWizard();
+  const searchParams = useSearchParams();
+
+  /**
+   * Handle direct navigation via query parameter
+   * Allows navigating to specific steps via ?step=X
+   */
+  useEffect(() => {
+    console.log('[Design Wizard] useEffect triggered, searchParams:', searchParams.toString());
+    const stepParam = searchParams.get('step');
+    console.log('[Design Wizard] Step parameter from URL:', stepParam);
+
+    if (stepParam) {
+      const stepNumber = parseInt(stepParam, 10);
+      console.log('[Design Wizard] Parsed step number:', stepNumber);
+
+      // Validate step number is between 1 and 5
+      if (stepNumber >= 1 && stepNumber <= 5) {
+        console.log('[Design Wizard] Navigating to step:', stepNumber);
+        goToStep(stepNumber as WizardStep);
+        console.log('[Design Wizard] goToStep called successfully');
+      } else {
+        console.log('[Design Wizard] Invalid step number (must be 1-5):', stepNumber);
+      }
+    } else {
+      console.log('[Design Wizard] No step parameter in URL, staying on current step:', currentStep);
+    }
+  }, [searchParams, goToStep]);
 
   /**
    * Render current step component

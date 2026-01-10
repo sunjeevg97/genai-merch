@@ -192,7 +192,9 @@ export async function POST(request: NextRequest) {
               : Prisma.JsonNull,
           };
 
-          if (item.design?.id) {
+          // Only connect to Design if it's a real database ID (UUID format)
+          // Skip placeholder IDs like 'wizard-design'
+          if (item.design?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.design.id)) {
             itemData.design = {
               connect: { id: item.design.id },
             };

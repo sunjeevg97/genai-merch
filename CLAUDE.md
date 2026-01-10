@@ -24,6 +24,30 @@ GenAI-Merch is an AI-powered custom apparel design and group ordering platform t
 
 ---
 
+## Use Context7 by Default
+
+Always use Context7 when you need:
+- **Code generation** - Generate boilerplate, components, utilities, or full features
+- **Setup or configuration steps** - Set up new libraries, configure tools, or initialize services
+- **Library/API documentation** - Look up syntax, best practices, or API reference for dependencies
+
+Context7 provides up-to-date, accurate information about libraries, frameworks, and APIs used in this project. Use it proactively before writing code to ensure you're following current best practices and using the correct syntax.
+
+**When to use Context7:**
+- ✅ Before implementing a new feature with unfamiliar libraries
+- ✅ When setting up third-party integrations (Stripe, Printful, OpenAI)
+- ✅ When uncertain about API syntax or parameters
+- ✅ Before configuring build tools, linters, or development environment
+
+**Example usage:**
+```
+User: "Add a new Stripe checkout flow"
+Assistant: [Uses Context7 to look up latest Stripe API docs and best practices]
+Assistant: [Generates code using current Stripe SDK syntax]
+```
+
+---
+
 ## Tech Stack
 
 ### Frontend
@@ -6510,6 +6534,171 @@ Manual logo upload uses the same Supabase Storage infrastructure as brand assets
 
 ---
 
+## 5-Step Design Wizard with Integrated Checkout
+
+GenAI-Merch features a complete 5-step wizard flow that takes users from concept to payment:
+
+### Wizard Steps
+
+**Step 1: Event Type Selection**
+- User selects purpose: charity, sports, company, family, school, other
+- Contextualizes AI design generation in later steps
+
+**Step 2: Event Details**
+- Dynamic form based on event type
+- Gathers relevant context (team name, sport, cause, etc.)
+- All fields feed into AI prompt generation
+
+**Step 3: AI Design Chat**
+- Split-screen: Chat interface + design gallery
+- Optional brand assets (logos, colors, fonts, voice)
+- GPT-4 helps refine design ideas
+- DALL-E 3 generates designs
+- Designs saved to Zustand store
+
+**Step 4: Product Showcase**
+- Full product catalog with filtering and search
+- Inline cart sidebar for real-time order building
+- Product detail modal with mockup preview
+- **Auto-generates mockups** with wizard design
+- **Cached mockup loading** - instant retrieval on variant switching
+- Add to cart with customization metadata
+
+**Step 5: Checkout & Payment**
+- Order review with mockup previews
+- Stripe checkout integration
+- Guest checkout support
+- Order creation with PENDING_PAYMENT status
+- Redirect to Stripe hosted checkout
+- Success page with order confirmation
+
+### Cart Integration in Step 4
+
+The Product Showcase step includes a persistent cart sidebar:
+
+**Features:**
+- Real-time cart updates
+- Quantity controls (+/- buttons)
+- Item removal
+- Mockup thumbnails
+- Technique and placement badges
+- Subtotal calculation
+- "Proceed to Checkout" button → Step 5
+
+**Cart Item Structure:**
+```typescript
+{
+  id: string,                  // Temporary cart ID
+  productVariantId: string,    // Database variant ID
+  product: { name, imageUrl, productType },
+  variant: { name, size, color },
+  design: {
+    id: 'wizard-design',      // Placeholder (not database ID)
+    imageUrl: string,          // Design URL
+    thumbnailUrl: string
+  },
+  mockupConfig: {
+    mockupUrl: string,         // Generated mockup
+    technique: 'dtg' | 'embroidery' | 'sublimation',
+    placement: 'front' | 'back' | 'sleeve_left' | 'sleeve_right',
+    styleId: number,           // Printful style ID
+    styleName: string          // e.g., "Men's T-Shirt"
+  },
+  quantity: number,
+  unitPrice: number            // Price in cents
+}
+```
+
+### Checkout Navigation Flow
+
+**Cart Sidebar → Checkout Step:**
+1. User clicks "Proceed to Checkout" in cart sidebar (Step 4)
+2. `handleCheckout` calls `nextStep()` from Zustand store
+3. `currentStep` changes from 4 → 5
+4. Design Wizard re-renders with CheckoutStep component
+5. URL remains `/design/create` (no query param update needed)
+
+**Checkout Step → Stripe Payment:**
+1. User reviews order items and pricing
+2. Clicks "Proceed to Payment" button
+3. `createCheckoutSession()` API call creates:
+   - Order record with PENDING_PAYMENT status
+   - OrderItems with frozen product/variant details
+   - Stripe checkout session with line items
+4. Design records handled intelligently:
+   - **Placeholder IDs** (`'wizard-design'`) → stored in customizationData only
+   - **Real UUIDs** → connected to Design table relation
+   - UUID validation regex: `/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i`
+5. Redirects to Stripe hosted checkout page
+6. After payment, redirects to success page
+7. Cart automatically cleared on success
+
+### Key Implementation Details
+
+**Wizard State Management (Zustand):**
+```typescript
+interface DesignWizardState {
+  currentStep: 1 | 2 | 3 | 4 | 5,
+  eventType: EventType | null,
+  eventDetails: EventDetails,
+  brandAssets: BrandAssets,
+  generatedDesigns: GeneratedDesign[],
+  selectedDesignId: string | null,
+  finalDesignUrl: string | null,
+
+  // Navigation
+  nextStep: () => void,
+  previousStep: () => void,
+  goToStep: (step) => void,
+}
+```
+
+**Cart State Management (Zustand):**
+```typescript
+interface CartStore {
+  items: CartItem[],
+  subtotal: number,        // Auto-calculated
+  itemCount: number,       // Auto-calculated
+
+  addItem: (item) => void,
+  removeItem: (id) => void,
+  updateQuantity: (id, qty) => void,
+  clearCart: () => void,
+}
+```
+
+**Checkout API Route (`/api/stripe/create-checkout`):**
+- Validates product availability and pricing
+- Creates Order with PENDING_PAYMENT status
+- Creates OrderItems with customization metadata
+- Handles placeholder vs real Design IDs
+- Creates Stripe session with shipping options
+- Returns session ID and URL for redirect
+
+**Success Page (`/checkout/success`):**
+- Retrieves session details from Stripe
+- Displays order confirmation
+- Shows final pricing (with Stripe-calculated shipping/tax)
+- Automatically clears cart
+- Provides "Track Order" and "Continue Shopping" CTAs
+
+### Recent Fixes (2026-01-10)
+
+**Fix 1: Checkout Button Navigation**
+- **Issue**: Cart sidebar "Proceed to Checkout" button wasn't navigating to Step 5
+- **Root Cause**: Button called `complete()` instead of `nextStep()`
+- **Solution**: Updated ProductShowcaseStep to call `nextStep()` for checkout navigation
+- **Files Changed**: `src/components/design/steps/product-showcase-step.tsx`
+
+**Fix 2: Design Record Connection Error**
+- **Issue**: Checkout failed with "No 'Design' record found" error
+- **Root Cause**: Cart items had placeholder ID `'wizard-design'` instead of database UUID
+- **Solution**: Added UUID validation before Design relation connection
+- **Impact**: Placeholder IDs skip relation, design URL still saved in customizationData
+- **Files Changed**: `src/app/api/stripe/create-checkout/route.ts`
+
+---
+
 ## Notes & Reminders
 
 - **Cost optimization**: Monitor OpenAI and Printful API usage
@@ -6519,7 +6708,8 @@ Manual logo upload uses the same Supabase Storage infrastructure as brand assets
 - **Testing accounts**: Use Stripe test mode and Printful sandbox for development
 - **Accessibility**: Follow WCAG guidelines for all UI components
 - **Performance**: Lazy load images and components where possible
+- **Design placeholder IDs**: Always use `'wizard-design'` for non-persisted designs in cart
 
 ---
 
-**Last Updated**: 2025-12-27 (Implemented Canvas Step with AI design integration and auto-mockup selection)
+**Last Updated**: 2026-01-10 (Completed 5-step wizard with cart integration and Stripe checkout flow)

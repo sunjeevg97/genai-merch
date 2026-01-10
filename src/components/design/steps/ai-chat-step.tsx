@@ -43,7 +43,6 @@ interface ChatMessage {
 export function AiChatStep() {
   const {
     eventType,
-    selectedProducts,
     brandAssets,
     generatedDesigns,
     selectedDesignId,
@@ -66,10 +65,6 @@ export function AiChatStep() {
 
     if (eventType) {
       context.push(`Event type: ${eventType}`);
-    }
-
-    if (selectedProducts.length > 0) {
-      context.push(`Products: ${selectedProducts.join(', ')}`);
     }
 
     if (brandAssets.colors.length > 0) {

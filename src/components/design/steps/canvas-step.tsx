@@ -18,10 +18,8 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useDesignWizard } from '@/lib/store/design-wizard';
 import type { PrintArea } from '@/lib/design/canvas-utils';
 import {
-  getMockupsByProduct,
   getDefaultMockup,
   type Mockup,
-  type ProductType,
 } from '@/lib/design/mockups';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -52,21 +50,6 @@ import { createAppError, getErrorMessage, isRetryableError, ErrorType, type AppE
 import { logError } from '@/lib/utils/errors';
 
 /**
- * Product ID to Product Type mapping
- */
-const PRODUCT_TYPE_MAP: Record<string, ProductType> = {
-  tshirt: 'tshirt',
-  sweatshirt: 'sweatshirt',
-  hoodie: 'hoodie',
-  polo: 'polo',
-  mug: 'mug',
-  pen: 'pen',
-  sticker: 'sticker',
-  hat: 'hat',
-  tote: 'tote',
-};
-
-/**
  * Canvas Step Component
  *
  * @example
@@ -76,7 +59,6 @@ const PRODUCT_TYPE_MAP: Record<string, ProductType> = {
  */
 export function CanvasStep() {
   const {
-    selectedProducts,
     finalDesignUrl,
     eventType,
     brandAssets,
@@ -109,14 +91,13 @@ export function CanvasStep() {
   useEffect(() => {
     console.log('[Canvas Step] Zustand store values:', {
       finalDesignUrl,
-      selectedProducts,
       selectedDesignId,
       generatedDesignsCount: generatedDesigns.length,
       firstBrandLogo,
       eventType,
       hasBrandColors: brandAssets.colors.length > 0,
     });
-  }, [finalDesignUrl, selectedProducts, selectedDesignId, generatedDesigns.length, firstBrandLogo, eventType, brandAssets.colors.length]);
+  }, [finalDesignUrl, selectedDesignId, generatedDesigns.length, firstBrandLogo, eventType, brandAssets.colors.length]);
 
   /**
    * Get current user ID
@@ -135,41 +116,12 @@ export function CanvasStep() {
   }, []);
 
   /**
-   * Auto-select mockup based on first selected product
+   * Set default mockup on mount
+   * (Product selection happens in step 4, after the canvas step in new wizard flow)
    */
   useEffect(() => {
-    if (selectedProducts.length === 0) {
-      setMockup(getDefaultMockup());
-      return;
-    }
-
-    // Get the first product and map to product type
-    const firstProductId = selectedProducts[0];
-    const productType = PRODUCT_TYPE_MAP[firstProductId];
-
-    console.log('[Canvas Step] Selecting mockup for product:', {
-      firstProductId,
-      productType,
-      allSelectedProducts: selectedProducts,
-    });
-
-    if (productType) {
-      // Try to find a mockup for this product type
-      const mockupsForProduct = getMockupsByProduct(productType);
-      if (mockupsForProduct.length > 0) {
-        setMockup(mockupsForProduct[0]); // Use the first available mockup
-        console.log('[Canvas Step] Mockup selected:', mockupsForProduct[0].name);
-      } else {
-        // Fallback to default if no mockup found
-        setMockup(getDefaultMockup());
-        console.log('[Canvas Step] No mockup found for product type, using default');
-      }
-    } else {
-      // Product ID not in map - use default
-      setMockup(getDefaultMockup());
-      console.warn('[Canvas Step] Product ID not mapped:', firstProductId);
-    }
-  }, [selectedProducts]);
+    setMockup(getDefaultMockup());
+  }, []);
 
   /**
    * Initialize canvas on mount
@@ -434,7 +386,6 @@ export function CanvasStep() {
         imageUrl: imageUrl.substring(0, 50) + '...',
         metadata: {
           eventType,
-          products: selectedProducts,
           hasAIDesign: !!finalDesignUrl,
           brandColors: brandAssets.colors,
         },

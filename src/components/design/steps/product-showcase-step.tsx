@@ -73,7 +73,7 @@ const SORT_OPTIONS = [
  * Product Showcase Step Component
  */
 export function ProductShowcaseStep() {
-  const { finalDesignUrl, previousStep, complete } = useDesignWizard();
+  const { finalDesignUrl, previousStep, nextStep } = useDesignWizard();
 
   // Cart state
   const { items, subtotal, itemCount, removeItem, updateQuantity } = useCart();
@@ -212,7 +212,7 @@ export function ProductShowcaseStep() {
         itemCount={itemCount}
         removeItem={removeItem}
         updateQuantity={updateQuantity}
-        handleCheckout={complete}
+        handleCheckout={nextStep}
       />
     );
   }
@@ -307,7 +307,7 @@ export function ProductShowcaseStep() {
           removeItem={removeItem}
           updateQuantity={updateQuantity}
           formatPrice={formatPrice}
-          handleCheckout={complete}
+          handleCheckout={nextStep}
         />
       </div>
     </div>

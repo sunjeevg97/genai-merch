@@ -18,7 +18,7 @@ import type {
   PrintfulOrder,
   PrintfulShippingRateRequest,
   PrintfulShippingRate,
-  PrintfulError as PrintfulErrorType,
+  PrintfulErrorResponse,
   PrintfulRateLimitInfo,
 } from './types';
 import { PrintfulError } from './types';
@@ -77,7 +77,7 @@ export class PrintfulClient {
     this.limiter.on('retry', (error, jobInfo) => {
       console.log('[Printful] Retrying request', {
         retryCount: jobInfo.retryCount,
-        error: error.message,
+        error: String(error),
       });
     });
   }
@@ -119,7 +119,7 @@ export class PrintfulClient {
       const data = await response.json();
 
       if (!response.ok) {
-        const errorData = data as PrintfulErrorType;
+        const errorData = data as PrintfulErrorResponse;
         console.error(`[Printful] Error ${response.status} ${endpoint}`, {
           status: response.status,
           code: errorData.error?.code,
@@ -289,10 +289,13 @@ export class PrintfulClient {
     // V2 API returns { data: [...], extra: [], paging: {...} }
     // NOT { result: [...] } like v1
     // Use default_mockup_styles=true to exclude seasonal/special styles
-    const response = await this.request<any>(
+    const apiResponse = await this.request<any>(
       'GET',
       `/v2/catalog-products/${productId}/mockup-styles?default_mockup_styles=true`
     );
+
+    // V2 API response is wrapped in result but has different structure
+    const response = apiResponse.result as any;
 
     console.log('[Printful] getMockupStyles - Response keys:', Object.keys(response));
 

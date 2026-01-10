@@ -238,6 +238,13 @@ export interface DesignWizardState {
    */
   recommendedProducts: string[];
 
+  /**
+   * Array of product IDs selected by the user
+   * User can select multiple products to create designs for
+   * @example ['tshirt-id-1', 'hoodie-id-2']
+   */
+  selectedProducts: string[];
+
   // ============================================================================
   // Navigation Actions
   // ============================================================================
@@ -383,6 +390,12 @@ export interface DesignWizardState {
    */
   setRecommendedProducts: (products: string[]) => void;
 
+  /**
+   * Toggle product selection (add if not selected, remove if already selected)
+   * @param productId - Product ID to toggle
+   */
+  toggleProduct: (productId: string) => void;
+
   // ============================================================================
   // Utility Actions
   // ============================================================================
@@ -421,6 +434,7 @@ const initialState = {
   selectedDesignId: null,
   finalDesignUrl: null,
   recommendedProducts: [],
+  selectedProducts: [],
 };
 
 /**
@@ -459,8 +473,13 @@ export const useDesignWizard = create<DesignWizardState>()(
 
         nextStep: () => {
           const { currentStep } = get();
-          if (currentStep < WizardStep.Products) {
-            set({ currentStep: currentStep + 1 });
+          console.log('[Design Wizard Store] nextStep called, currentStep:', currentStep);
+          if (currentStep < WizardStep.Checkout) {
+            const newStep = currentStep + 1;
+            set({ currentStep: newStep });
+            console.log('[Design Wizard Store] Moved to step:', newStep);
+          } else {
+            console.log('[Design Wizard Store] Already at final step, cannot proceed');
           }
         },
 
@@ -472,7 +491,9 @@ export const useDesignWizard = create<DesignWizardState>()(
         },
 
         goToStep: (step: WizardStep) => {
+          console.log('[Design Wizard Store] goToStep called with step:', step);
           set({ currentStep: step });
+          console.log('[Design Wizard Store] currentStep set to:', step);
         },
 
         // ========================================================================
@@ -631,6 +652,17 @@ export const useDesignWizard = create<DesignWizardState>()(
           set({ recommendedProducts: products });
         },
 
+        toggleProduct: (productId: string) => {
+          const { selectedProducts } = get();
+          if (selectedProducts.includes(productId)) {
+            // Remove if already selected
+            set({ selectedProducts: selectedProducts.filter(id => id !== productId) });
+          } else {
+            // Add if not selected
+            set({ selectedProducts: [...selectedProducts, productId] });
+          }
+        },
+
         // ========================================================================
         // Utility Actions
         // ========================================================================
@@ -655,6 +687,7 @@ export const useDesignWizard = create<DesignWizardState>()(
           selectedDesignId: state.selectedDesignId,
           finalDesignUrl: state.finalDesignUrl,
           recommendedProducts: state.recommendedProducts,
+          selectedProducts: state.selectedProducts,
         }),
       }
     ),

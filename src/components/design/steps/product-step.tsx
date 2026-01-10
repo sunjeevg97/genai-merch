@@ -101,7 +101,7 @@ const PRODUCTS: Product[] = [
  * ```
  */
 export function ProductStep() {
-  const { selectedProducts, setSelectedProducts, nextStep, previousStep } = useDesignWizard();
+  const { selectedProducts, toggleProduct, nextStep, previousStep } = useDesignWizard();
   const [showValidationError, setShowValidationError] = useState(false);
 
   /**
@@ -115,13 +115,7 @@ export function ProductStep() {
    * Toggle product selection
    */
   const handleToggleProduct = (productId: string) => {
-    if (selectedProducts.includes(productId)) {
-      // Remove product
-      setSelectedProducts(selectedProducts.filter((id) => id !== productId));
-    } else {
-      // Add product
-      setSelectedProducts([...selectedProducts, productId]);
-    }
+    toggleProduct(productId);
     // Clear validation error when user makes a selection
     setShowValidationError(false);
   };
@@ -244,7 +238,7 @@ export function ProductStep() {
         </Button>
 
         <Button onClick={handleContinue} type="button">
-          Continue to Brand Assets
+          Proceed to Checkout
         </Button>
       </div>
     </div>

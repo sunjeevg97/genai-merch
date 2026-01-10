@@ -134,12 +134,9 @@ async function syncProduct(
     // Determine category
     const category = mapProductCategory(product);
 
-    // Get product image (use first file's image or fallback to product.image)
+    // Get product image from product.image field
     // Validate it's a real URL, not metadata like "Print file"
-    const rawProductImage =
-      product.files?.find((f) => f.type === 'default')?.preview_url ||
-      product.image ||
-      '';
+    const rawProductImage = product.image || '';
     const productImage = isValidImageUrl(rawProductImage) ? rawProductImage : '';
 
     // Upsert product
@@ -153,7 +150,7 @@ async function syncProduct(
         imageUrl: productImage,
         mockupUrl: product.image,
         active: !product.is_discontinued,
-        metadata: {
+        metadata: JSON.parse(JSON.stringify({
           brand: product.brand,
           model: product.model,
           techniques: product.techniques,
@@ -161,7 +158,7 @@ async function syncProduct(
           options: product.options,
           avg_fulfillment_time: product.avg_fulfillment_time,
           origin_country: product.origin_country,
-        },
+        })),
         updatedAt: new Date(),
       },
       create: {
@@ -175,7 +172,7 @@ async function syncProduct(
         imageUrl: productImage,
         mockupUrl: product.image,
         active: !product.is_discontinued,
-        metadata: {
+        metadata: JSON.parse(JSON.stringify({
           brand: product.brand,
           model: product.model,
           techniques: product.techniques,
@@ -183,7 +180,7 @@ async function syncProduct(
           options: product.options,
           avg_fulfillment_time: product.avg_fulfillment_time,
           origin_country: product.origin_country,
-        },
+        })),
       },
     });
 
@@ -235,7 +232,7 @@ async function syncProduct(
             price: retailPriceCents,
             inStock: variant.in_stock,
             imageUrl: variantImageUrl,
-            metadata: {
+            metadata: JSON.parse(JSON.stringify({
               color_code: variant.color_code,
               color_code2: variant.color_code2,
               availability_regions: variant.availability_regions,
@@ -244,7 +241,7 @@ async function syncProduct(
               base_price: basePriceCents,
               base_price_formatted: formatCentsToDollars(basePriceCents),
               retail_price_formatted: formatCentsToDollars(retailPriceCents),
-            },
+            })),
             updatedAt: new Date(),
           },
           create: {
@@ -256,7 +253,7 @@ async function syncProduct(
             price: retailPriceCents,
             inStock: variant.in_stock,
             imageUrl: variantImageUrl,
-            metadata: {
+            metadata: JSON.parse(JSON.stringify({
               color_code: variant.color_code,
               color_code2: variant.color_code2,
               availability_regions: variant.availability_regions,
@@ -265,7 +262,7 @@ async function syncProduct(
               base_price: basePriceCents,
               base_price_formatted: formatCentsToDollars(basePriceCents),
               retail_price_formatted: formatCentsToDollars(retailPriceCents),
-            },
+            })),
           },
         });
 

@@ -26,7 +26,7 @@ import { logError } from '@/lib/utils/errors';
  */
 interface DesignChatProps {
   eventType: EventType | null;
-  products: string[];
+  products?: string[];
   brandAssets?: BrandAssets;
   onDesignGenerated?: (imageUrl: string, prompt: string) => void;
 }

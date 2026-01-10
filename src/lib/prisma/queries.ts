@@ -124,7 +124,7 @@ export async function getOrdersByUserId(userId: string): Promise<Order[]> {
   return prisma.order.findMany({
     where: { userId },
     include: {
-      design: true,
+      items: true,
       groupOrder: true,
     },
     orderBy: { createdAt: "desc" },
@@ -141,7 +141,7 @@ export async function getOrderById(id: string) {
     where: { id },
     include: {
       user: true,
-      design: true,
+      items: true,
       groupOrder: true,
     },
   });
@@ -154,16 +154,45 @@ export async function getOrderById(id: string) {
  */
 export async function createOrder(data: {
   userId: string;
-  designId: string;
+  orderNumber: string;
   groupOrderId?: string;
-  productType: string;
-  size: string;
-  quantity: number;
-  shippingAddress: object;
-  price: number;
+  subtotal: number;
+  shipping: number;
+  tax: number;
+  total: number;
+  currency?: string;
+  shippingAddressId?: string;
+  stripeCheckoutSessionId?: string;
+  items: {
+    productVariantId: string;
+    productName: string;
+    variantName: string;
+    designId?: string;
+    customizationData?: object;
+    quantity: number;
+    unitPrice: number;
+    thumbnailUrl?: string;
+  }[];
 }) {
   return prisma.order.create({
-    data,
+    data: {
+      userId: data.userId,
+      orderNumber: data.orderNumber,
+      groupOrderId: data.groupOrderId,
+      subtotal: data.subtotal,
+      shipping: data.shipping,
+      tax: data.tax,
+      total: data.total,
+      currency: data.currency || 'USD',
+      shippingAddressId: data.shippingAddressId,
+      stripeCheckoutSessionId: data.stripeCheckoutSessionId,
+      items: {
+        create: data.items,
+      },
+    },
+    include: {
+      items: true,
+    },
   });
 }
 
@@ -198,7 +227,7 @@ export async function getGroupOrderBySlug(slug: string) {
       orders: {
         include: {
           user: true,
-          design: true,
+          items: true,
         },
       },
     },

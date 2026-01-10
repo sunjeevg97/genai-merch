@@ -1,17 +1,15 @@
 /**
  * Checkout Button Component
  *
- * Handles checkout flow initiation with Stripe.
+ * Navigates to the design wizard's checkout step for order review.
  */
 
 'use client';
 
-import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { ShoppingBag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { useCart } from '@/lib/cart/store';
-import { createCheckoutSession, redirectToCheckout } from '@/lib/stripe/client';
 
 interface CheckoutButtonProps {
   disabled?: boolean;
@@ -20,42 +18,33 @@ interface CheckoutButtonProps {
 }
 
 export function CheckoutButton({ disabled, itemCount, subtotal }: CheckoutButtonProps) {
-  const { items } = useCart();
-  const [isProcessing, setIsProcessing] = useState(false);
+  const router = useRouter();
 
-  const handleCheckout = async () => {
+  const handleCheckout = () => {
+    console.log('[Checkout Button] Button clicked!', { disabled, itemCount, subtotal });
+
     if (disabled || itemCount === 0) {
+      console.log('[Checkout Button] Cart is empty, showing error');
       toast.error('Your cart is empty');
       return;
     }
 
-    setIsProcessing(true);
+    console.log('[Checkout Button] Navigating to checkout step...');
+    console.log('[Checkout Button] Current URL:', window.location.href);
 
     try {
-      console.log('[Checkout Button] Creating Stripe session...', { itemCount, subtotal });
+      // Navigate to design wizard's checkout step (Step 5)
+      const targetUrl = '/design/create?step=5';
+      console.log('[Checkout Button] Target URL:', targetUrl);
+      router.push(targetUrl);
+      console.log('[Checkout Button] Navigation triggered successfully');
 
-      // Create checkout session with cart items
-      const { sessionId, sessionUrl, orderId, orderNumber } = await createCheckoutSession({
-        items,
-      });
-
-      console.log('[Checkout Button] Session created:', { sessionId, orderId, orderNumber });
-
-      toast.success('Redirecting to checkout...', {
-        description: `Order ${orderNumber} created`,
-      });
-
-      // Redirect to Stripe Checkout
-      await redirectToCheckout(sessionUrl);
-
-      // Note: Cart will be cleared on the success page after payment confirmation
+      // Log URL after a brief delay to see if it changed
+      setTimeout(() => {
+        console.log('[Checkout Button] URL after navigation:', window.location.href);
+      }, 100);
     } catch (error) {
-      console.error('[Checkout Button] Error:', error);
-      toast.error('Failed to proceed to checkout', {
-        description: error instanceof Error ? error.message : 'Please try again',
-      });
-    } finally {
-      setIsProcessing(false);
+      console.error('[Checkout Button] Navigation error:', error);
     }
   };
 
@@ -63,11 +52,11 @@ export function CheckoutButton({ disabled, itemCount, subtotal }: CheckoutButton
     <Button
       size="lg"
       className="w-full"
-      disabled={disabled || itemCount === 0 || isProcessing}
+      disabled={disabled || itemCount === 0}
       onClick={handleCheckout}
     >
       <ShoppingBag className="mr-2 h-5 w-5" />
-      {isProcessing ? 'Processing...' : 'Proceed to Checkout'}
+      Proceed to Checkout
     </Button>
   );
 }

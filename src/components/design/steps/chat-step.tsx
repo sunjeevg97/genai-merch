@@ -35,7 +35,6 @@ import { formatDistanceToNow } from 'date-fns';
 export function ChatStep() {
   const {
     eventType,
-    selectedProducts,
     brandAssets,
     generatedDesigns,
     selectedDesignId,
@@ -149,7 +148,6 @@ export function ChatStep() {
         <div className="order-2 lg:order-1 h-[600px]">
           <DesignChat
             eventType={eventType}
-            products={selectedProducts}
             brandAssets={brandAssets}
             onDesignGenerated={handleDesignGenerated}
           />

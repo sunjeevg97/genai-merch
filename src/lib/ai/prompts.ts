@@ -6,7 +6,7 @@
  * - DALL-E 3 (image generation for merchandise designs)
  */
 
-import type { EventType, BrandAssets } from '@/lib/store/design-wizard';
+import type { EventType, EventDetails, BrandAssets } from '@/lib/store/design-wizard';
 
 /**
  * Design Context
@@ -15,6 +15,7 @@ import type { EventType, BrandAssets } from '@/lib/store/design-wizard';
  */
 export interface DesignContext {
   eventType: EventType | null;
+  eventDetails?: EventDetails;
   products: string[];
   brandAssets?: {
     colors: string[];
@@ -31,11 +32,11 @@ export interface DesignContext {
  */
 const EVENT_TYPE_DESCRIPTIONS: Record<EventType, string> = {
   charity: 'charity event, fundraiser, or non-profit organization',
-  fundraiser: 'school fundraiser, team fundraiser, or community fundraising campaign',
-  company: 'corporate event, company branding, team building, or business conference',
   sports: 'sports team, tournament, league, or athletic event',
+  company: 'corporate event, company branding, team building, or business conference',
+  family: 'family reunion, gathering, celebration, or family event',
   school: 'school event, university, graduation, or educational institution',
-  personal: 'personal event, family reunion, birthday, wedding, or celebration',
+  other: 'special event or custom occasion',
 };
 
 /**
@@ -79,7 +80,7 @@ const PRODUCT_DESCRIPTIONS: Record<string, string> = {
  * ```
  */
 export function buildChatSystemPrompt(context: DesignContext): string {
-  const { eventType, products, brandAssets } = context;
+  const { eventType, eventDetails, products, brandAssets } = context;
 
   // Build context sections
   const sections: string[] = [];
@@ -91,13 +92,44 @@ export function buildChatSystemPrompt(context: DesignContext): string {
     'offering creative suggestions, and helping them refine their ideas.'
   );
 
-  // Event context
+  // Event context with details
   if (eventType) {
     const eventDesc = EVENT_TYPE_DESCRIPTIONS[eventType];
-    sections.push(
-      `\n\nCONTEXT: The user is creating designs for a ${eventDesc}. ` +
-      'Keep this context in mind when suggesting design ideas and asking questions.'
-    );
+    let contextStr = `\n\nCONTEXT: The user is creating designs for a ${eventDesc}`;
+
+    // Add specific details for richer context
+    if (eventDetails) {
+      const details: string[] = [];
+
+      if (eventDetails.name) {
+        details.push(`called "${eventDetails.name}"`);
+      }
+
+      // Add event-specific context
+      if (eventType === 'charity' && eventDetails.cause) {
+        details.push(`supporting ${eventDetails.cause}`);
+      } else if (eventType === 'sports' && eventDetails.sport) {
+        details.push(`for ${eventDetails.sport}`);
+        if (eventDetails.ageGroup) details.push(`at ${eventDetails.ageGroup} level`);
+      } else if (eventType === 'company' && eventDetails.industry) {
+        details.push(`in ${eventDetails.industry}`);
+      } else if (eventType === 'family' && eventDetails.familyName) {
+        details.push(`for the ${eventDetails.familyName} family`);
+      } else if (eventType === 'school' && eventDetails.gradeLevel) {
+        details.push(`for ${eventDetails.gradeLevel}`);
+      }
+
+      if (details.length > 0) {
+        contextStr += ' ' + details.join(', ');
+      }
+
+      if (eventDetails.description) {
+        contextStr += `. Additional context: ${eventDetails.description}`;
+      }
+    }
+
+    contextStr += '. Keep this context in mind when suggesting design ideas and asking questions.';
+    sections.push(contextStr);
   }
 
   // Product context
@@ -190,7 +222,7 @@ export function buildImageGenerationPrompt(
   userPrompt: string,
   context: DesignContext
 ): string {
-  const { eventType, products, brandAssets } = context;
+  const { eventType, eventDetails, products, brandAssets } = context;
 
   const sections: string[] = [];
 
@@ -203,12 +235,59 @@ export function buildImageGenerationPrompt(
     'High contrast, bold lines, limited color palette.'
   );
 
-  // Event type context
+  // Event type and details context
   if (eventType) {
     const eventDesc = EVENT_TYPE_DESCRIPTIONS[eventType];
-    sections.push(
-      `Context: This design is for a ${eventDesc}.`
-    );
+    let contextStr = `Context: This design is for a ${eventDesc}`;
+
+    // Add specific event details to provide richer context
+    if (eventDetails) {
+      const details: string[] = [];
+
+      if (eventDetails.name) {
+        details.push(`named "${eventDetails.name}"`);
+      }
+
+      // Event-specific details
+      switch (eventType) {
+        case 'charity':
+          if (eventDetails.cause) details.push(`focused on ${eventDetails.cause}`);
+          if (eventDetails.eventType) details.push(`for a ${eventDetails.eventType}`);
+          break;
+        case 'sports':
+          if (eventDetails.sport) details.push(`for ${eventDetails.sport}`);
+          if (eventDetails.ageGroup) details.push(`${eventDetails.ageGroup} level`);
+          if (eventDetails.teamLevel) details.push(`${eventDetails.teamLevel} team`);
+          break;
+        case 'company':
+          if (eventDetails.industry) details.push(`in the ${eventDetails.industry} industry`);
+          if (eventDetails.companyEventType) details.push(`for a ${eventDetails.companyEventType}`);
+          break;
+        case 'family':
+          if (eventDetails.familyName) details.push(`for the ${eventDetails.familyName} family`);
+          if (eventDetails.year) details.push(`in ${eventDetails.year}`);
+          if (eventDetails.theme) details.push(`with a ${eventDetails.theme} theme`);
+          break;
+        case 'school':
+          if (eventDetails.gradeLevel) details.push(`for ${eventDetails.gradeLevel}`);
+          if (eventDetails.schoolEventType) details.push(`${eventDetails.schoolEventType}`);
+          break;
+      }
+
+      if (eventDetails.targetAudience) {
+        details.push(`targeting ${eventDetails.targetAudience}`);
+      }
+
+      if (eventDetails.tone) {
+        details.push(`with a ${eventDetails.tone} tone`);
+      }
+
+      if (details.length > 0) {
+        contextStr += ' ' + details.join(', ');
+      }
+    }
+
+    sections.push(contextStr + '.');
   }
 
   // Product placement guidance
@@ -329,30 +408,30 @@ export function getStarterPrompts(eventType: EventType | null): string[] {
       'Design a compassionate logo that inspires giving',
       'Make an uplifting design that represents hope and community',
     ],
-    fundraiser: [
-      'Create a vibrant design for our school fundraiser',
-      'Design an energetic logo that encourages participation',
-      'Make a fun design that appeals to families and students',
+    sports: [
+      'Create a bold, athletic team logo with a mascot',
+      'Design a dynamic sports emblem with movement',
+      'Make an energetic mascot design that shows team spirit',
     ],
     company: [
       'Create a professional corporate logo',
       'Design a modern tech company emblem',
       'Make a sophisticated business design with clean lines',
     ],
-    sports: [
-      'Create a bold, athletic team logo with a mascot',
-      'Design a dynamic sports emblem with movement',
-      'Make an energetic mascot design that shows team spirit',
+    family: [
+      'Create a fun design for our family reunion',
+      'Design a memorable family crest or emblem',
+      'Make a celebratory design with our family name',
     ],
     school: [
       'Create a classic school crest design',
       'Design a modern university logo',
       'Make a spirited design for our class reunion',
     ],
-    personal: [
-      'Create a fun design for our family reunion',
-      'Design an elegant monogram for our wedding',
-      'Make a celebratory design for our birthday party',
+    other: [
+      'Create a modern, minimalist logo design',
+      'Design something bold and eye-catching',
+      'Make a fun and playful design',
     ],
   };
 

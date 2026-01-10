@@ -1,18 +1,27 @@
 /**
  * Design Wizard Container
  *
- * Main wizard component that orchestrates the 5-step design flow.
+ * Main wizard component that orchestrates the streamlined 5-step design flow:
+ * 1. Event Type Selection
+ * 2. Event Details
+ * 3. AI Chat Interface (with optional brand assets)
+ * 4. Product Selection
+ * 5. Checkout
+ *
  * Handles step navigation, progress indication, and transitions.
+ * Supports direct navigation via query parameter (?step=X).
  */
 
 'use client';
 
+import { useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useDesignWizard, WizardStep } from '@/lib/store/design-wizard';
 import { EventTypeStep } from '@/components/design/steps/event-type-step';
-import { ProductStep } from '@/components/design/steps/product-step';
-import { BrandAssetsStep } from '@/components/design/steps/brand-assets-step';
+import { EventDetailsStep } from '@/components/design/steps/event-details-step';
 import { ChatStep } from '@/components/design/steps/chat-step';
-import { CanvasStep } from '@/components/design/steps/canvas-step';
+import { ProductShowcaseStep } from '@/components/design/steps/product-showcase-step';
+import { CheckoutStep } from '@/components/design/steps/checkout-step';
 import { Check, Circle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -27,10 +36,10 @@ interface StepConfig {
 
 const STEPS: StepConfig[] = [
   { step: WizardStep.EventType, label: 'Event Type', shortLabel: 'Event' },
-  { step: WizardStep.Products, label: 'Products', shortLabel: 'Products' },
-  { step: WizardStep.BrandAssets, label: 'Brand Assets', shortLabel: 'Assets' },
-  { step: WizardStep.AiChat, label: 'AI Design', shortLabel: 'Chat' },
-  { step: WizardStep.Canvas, label: 'Canvas', shortLabel: 'Canvas' },
+  { step: WizardStep.EventDetails, label: 'Event Details', shortLabel: 'Details' },
+  { step: WizardStep.AiChat, label: 'AI Design', shortLabel: 'Design' },
+  { step: WizardStep.Products, label: 'Choose Products', shortLabel: 'Products' },
+  { step: WizardStep.Checkout, label: 'Checkout', shortLabel: 'Checkout' },
 ];
 
 /**
@@ -42,7 +51,34 @@ const STEPS: StepConfig[] = [
  * ```
  */
 export function DesignWizard() {
-  const { currentStep } = useDesignWizard();
+  const { currentStep, goToStep } = useDesignWizard();
+  const searchParams = useSearchParams();
+
+  /**
+   * Handle direct navigation via query parameter
+   * Allows navigating to specific steps via ?step=X
+   */
+  useEffect(() => {
+    console.log('[Design Wizard] useEffect triggered, searchParams:', searchParams.toString());
+    const stepParam = searchParams.get('step');
+    console.log('[Design Wizard] Step parameter from URL:', stepParam);
+
+    if (stepParam) {
+      const stepNumber = parseInt(stepParam, 10);
+      console.log('[Design Wizard] Parsed step number:', stepNumber);
+
+      // Validate step number is between 1 and 5
+      if (stepNumber >= 1 && stepNumber <= 5) {
+        console.log('[Design Wizard] Navigating to step:', stepNumber);
+        goToStep(stepNumber as WizardStep);
+        console.log('[Design Wizard] goToStep called successfully');
+      } else {
+        console.log('[Design Wizard] Invalid step number (must be 1-5):', stepNumber);
+      }
+    } else {
+      console.log('[Design Wizard] No step parameter in URL, staying on current step:', currentStep);
+    }
+  }, [searchParams, goToStep]);
 
   /**
    * Render current step component
@@ -51,14 +87,14 @@ export function DesignWizard() {
     switch (currentStep) {
       case WizardStep.EventType:
         return <EventTypeStep />;
-      case WizardStep.Products:
-        return <ProductStep />;
-      case WizardStep.BrandAssets:
-        return <BrandAssetsStep />;
+      case WizardStep.EventDetails:
+        return <EventDetailsStep />;
       case WizardStep.AiChat:
         return <ChatStep />;
-      case WizardStep.Canvas:
-        return <CanvasStep />;
+      case WizardStep.Products:
+        return <ProductShowcaseStep />;
+      case WizardStep.Checkout:
+        return <CheckoutStep />;
       default:
         return <EventTypeStep />;
     }

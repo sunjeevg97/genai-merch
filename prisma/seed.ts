@@ -14,7 +14,12 @@ async function main() {
 
   // Clean existing data (optional - comment out to preserve data)
   console.log("🧹 Cleaning existing data...");
+  await prisma.orderStatusHistory.deleteMany();
+  await prisma.orderItem.deleteMany();
   await prisma.order.deleteMany();
+  await prisma.address.deleteMany();
+  await prisma.cartItem.deleteMany();
+  await prisma.cart.deleteMany();
   await prisma.groupOrder.deleteMany();
   await prisma.design.deleteMany();
   await prisma.brandProfile.deleteMany();
@@ -216,222 +221,11 @@ async function main() {
   console.log(`✓ Created ${groupOrders.length} group orders`);
 
   // Create Orders
-  console.log("🛒 Creating orders...");
-  const orders = await Promise.all([
-    // Orders for Group Order 1
-    prisma.order.create({
-      data: {
-        userId: users[0].id,
-        designId: designs[0].id,
-        groupOrderId: groupOrders[0].id,
-        productType: "t-shirt",
-        size: "M",
-        quantity: 2,
-        status: "pending",
-        price: 4998, // $49.98 in cents
-        shippingAddress: {
-          name: "Sarah Johnson",
-          street: "123 Main St",
-          city: "Portland",
-          state: "OR",
-          zip: "97201",
-          country: "US",
-        },
-      },
-    }),
-    prisma.order.create({
-      data: {
-        userId: users[2].id,
-        designId: designs[0].id,
-        groupOrderId: groupOrders[0].id,
-        productType: "t-shirt",
-        size: "L",
-        quantity: 1,
-        status: "pending",
-        price: 2499, // $24.99 in cents
-        shippingAddress: {
-          name: "Emily Rodriguez",
-          street: "456 Oak Ave",
-          city: "Portland",
-          state: "OR",
-          zip: "97202",
-          country: "US",
-        },
-      },
-    }),
-    prisma.order.create({
-      data: {
-        userId: users[0].id,
-        designId: designs[1].id,
-        groupOrderId: groupOrders[0].id,
-        productType: "t-shirt",
-        size: "S",
-        quantity: 3,
-        status: "processing",
-        price: 7497, // $74.97 in cents
-        stripeSessionId: "cs_test_abc123",
-        shippingAddress: {
-          name: "Sarah Johnson",
-          street: "123 Main St",
-          city: "Portland",
-          state: "OR",
-          zip: "97201",
-          country: "US",
-        },
-      },
-    }),
-
-    // Orders for Group Order 2
-    prisma.order.create({
-      data: {
-        userId: users[1].id,
-        designId: designs[2].id,
-        groupOrderId: groupOrders[1].id,
-        productType: "hoodie",
-        size: "XL",
-        quantity: 1,
-        status: "processing",
-        price: 4999, // $49.99 in cents
-        stripeSessionId: "cs_test_xyz789",
-        printfulOrderId: "12345678",
-        shippingAddress: {
-          name: "Mike Chen",
-          street: "789 Tech Blvd",
-          city: "San Francisco",
-          state: "CA",
-          zip: "94105",
-          country: "US",
-        },
-      },
-    }),
-    prisma.order.create({
-      data: {
-        userId: users[2].id,
-        designId: designs[2].id,
-        groupOrderId: groupOrders[1].id,
-        productType: "hoodie",
-        size: "M",
-        quantity: 1,
-        status: "shipped",
-        price: 4999, // $49.99 in cents
-        stripeSessionId: "cs_test_def456",
-        printfulOrderId: "12345679",
-        shippingAddress: {
-          name: "Emily Rodriguez",
-          street: "456 Oak Ave",
-          city: "Portland",
-          state: "OR",
-          zip: "97202",
-          country: "US",
-        },
-      },
-    }),
-
-    // Individual Orders (not part of group orders)
-    prisma.order.create({
-      data: {
-        userId: users[1].id,
-        designId: designs[3].id,
-        productType: "polo",
-        size: "L",
-        quantity: 5,
-        status: "delivered",
-        price: 24995, // $249.95 in cents
-        stripeSessionId: "cs_test_ghi789",
-        printfulOrderId: "12345680",
-        shippingAddress: {
-          name: "Mike Chen",
-          street: "789 Tech Blvd",
-          city: "San Francisco",
-          state: "CA",
-          zip: "94105",
-          country: "US",
-        },
-      },
-    }),
-    prisma.order.create({
-      data: {
-        userId: users[2].id,
-        designId: designs[4].id,
-        productType: "t-shirt",
-        size: "M",
-        quantity: 10,
-        status: "pending",
-        price: 24990, // $249.90 in cents
-        shippingAddress: {
-          name: "Emily Rodriguez",
-          street: "456 Oak Ave",
-          city: "Portland",
-          state: "OR",
-          zip: "97202",
-          country: "US",
-        },
-      },
-    }),
-    prisma.order.create({
-      data: {
-        userId: users[0].id,
-        designId: designs[1].id,
-        productType: "hoodie",
-        size: "L",
-        quantity: 2,
-        status: "processing",
-        price: 9998, // $99.98 in cents
-        stripeSessionId: "cs_test_jkl012",
-        shippingAddress: {
-          name: "Sarah Johnson",
-          street: "123 Main St",
-          city: "Portland",
-          state: "OR",
-          zip: "97201",
-          country: "US",
-        },
-      },
-    }),
-    prisma.order.create({
-      data: {
-        userId: users[1].id,
-        designId: designs[2].id,
-        productType: "t-shirt",
-        size: "XL",
-        quantity: 1,
-        status: "shipped",
-        price: 2499, // $24.99 in cents
-        stripeSessionId: "cs_test_mno345",
-        printfulOrderId: "12345681",
-        shippingAddress: {
-          name: "Mike Chen",
-          street: "789 Tech Blvd",
-          city: "San Francisco",
-          state: "CA",
-          zip: "94105",
-          country: "US",
-        },
-      },
-    }),
-    prisma.order.create({
-      data: {
-        userId: users[0].id,
-        designId: designs[0].id,
-        productType: "polo",
-        size: "M",
-        quantity: 3,
-        status: "delivered",
-        price: 14997, // $149.97 in cents
-        stripeSessionId: "cs_test_pqr678",
-        printfulOrderId: "12345682",
-        shippingAddress: {
-          name: "Sarah Johnson",
-          street: "123 Main St",
-          city: "Portland",
-          state: "OR",
-          zip: "97201",
-          country: "US",
-        },
-      },
-    }),
-  ]);
-  console.log(`✓ Created ${orders.length} orders`);
+  // NOTE: Order seeding temporarily disabled - schema was updated for Stripe checkout integration
+  // Orders now require: orderNumber, subtotal, shipping, tax, total fields
+  // and ProductVariant relations. Uncomment and update when product seeding is added.
+  console.log("🛒 Skipping order creation (schema updated for Stripe integration)");
+  const orders: any[] = [];
 
   // Summary
   console.log("\n✅ Database seeded successfully!");

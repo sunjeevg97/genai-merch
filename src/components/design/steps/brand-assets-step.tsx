@@ -53,7 +53,6 @@ export function BrandAssetsStep() {
     addLogo,
     removeLogo,
     setVoice,
-    completeBrandAssets,
     nextStep,
     previousStep,
   } = useDesignWizard();
@@ -343,7 +342,6 @@ export function BrandAssetsStep() {
    * Handle Skip button
    */
   const handleSkip = () => {
-    completeBrandAssets(false);
     nextStep();
   };
 
@@ -354,13 +352,6 @@ export function BrandAssetsStep() {
     // Save voice to store
     setVoice(voice);
 
-    // Check if user provided any assets
-    const hasAssets =
-      uploadedLogos.length > 0 ||
-      colors.length > 0 ||
-      voice.trim().length > 0;
-
-    completeBrandAssets(hasAssets);
     nextStep();
   };
 

@@ -4,10 +4,9 @@
  * Zustand store for managing the AI-first design wizard state.
  * This store orchestrates the multi-step design creation flow:
  * 1. Event Type Selection
- * 2. Product Selection
- * 3. Brand Assets Upload (Optional)
- * 4. AI Chat Interface (Design Generation)
- * 5. Canvas Editor (Final Tweaks)
+ * 2. Event Details
+ * 3. AI Chat Interface (Design Generation)
+ * 4. Product Selection & Checkout
  *
  * @module lib/store/design-wizard
  */
@@ -19,15 +18,55 @@ import { devtools, persist } from 'zustand/middleware';
  * Event Types
  *
  * Categories of events/purposes for custom merchandise.
- * Used in Step 1 to contextualize the design generation.
+ * Used in Step 1 to contextualize the design generation and product recommendations.
  */
 export type EventType =
   | 'charity'        // Charity events, fundraisers, non-profits
-  | 'fundraiser'     // School fundraisers, team fundraisers
-  | 'company'        // Corporate events, team building, branded merchandise
   | 'sports'         // Sports teams, tournaments, leagues
+  | 'company'        // Corporate events, team building, branded merchandise
+  | 'family'         // Family reunions, gatherings
   | 'school'         // Schools, universities, graduation
-  | 'personal';      // Personal events, birthdays, weddings
+  | 'other';         // Other events/occasions
+
+/**
+ * Event Details
+ *
+ * Dynamic details about the event/occasion.
+ * Fields vary based on event type to gather relevant information.
+ */
+export interface EventDetails {
+  // Common fields
+  name?: string;              // Event/organization/team name
+  description?: string;       // Brief description
+
+  // Charity-specific
+  cause?: string;             // Charity focus (health, education, etc.)
+  eventType?: string;         // fundraiser, awareness, gala, etc.
+
+  // Sports-specific
+  sport?: string;             // Type of sport
+  ageGroup?: string;          // youth, adult, senior
+  teamLevel?: string;         // recreational, competitive, professional
+
+  // Company-specific
+  industry?: string;          // Business industry
+  companyEventType?: string;  // conference, team building, etc.
+
+  // Family-specific
+  familyName?: string;        // Family surname
+  theme?: string;             // Reunion theme
+  year?: string;              // Event year/occasion
+  location?: string;          // Event location
+
+  // School-specific
+  gradeLevel?: string;        // Grade level/department
+  schoolEventType?: string;   // graduation, spirit wear, club, etc.
+
+  // Common across all
+  targetAudience?: string;    // Who will use/wear these items
+  tone?: string;              // Style preference (professional, casual, fun, etc.)
+  colors?: string[];          // Preferred colors (if any)
+}
 
 /**
  * Brand Assets
@@ -104,14 +143,14 @@ export interface GeneratedDesign {
 /**
  * Wizard Steps
  *
- * Enumeration of the five steps in the design wizard flow.
+ * Enumeration of the five steps in the streamlined design wizard flow.
  */
 export enum WizardStep {
   EventType = 1,      // Step 1: Select event type/purpose
-  Products = 2,       // Step 2: Select products for merchandise
-  BrandAssets = 3,    // Step 3: Upload brand assets (optional)
-  AiChat = 4,         // Step 4: AI chat interface for design generation
-  Canvas = 5,         // Step 5: Final canvas editor for tweaks
+  EventDetails = 2,   // Step 2: Provide event details
+  AiChat = 3,         // Step 3: AI chat interface for design generation
+  Products = 4,       // Step 4: Select products
+  Checkout = 5,       // Step 5: Review cart and checkout
 }
 
 /**
@@ -127,13 +166,13 @@ export interface DesignWizardState {
 
   /**
    * Current active step in the wizard
-   * 1 = Event Type, 2 = Products, 3 = Brand Assets, 4 = AI Chat, 5 = Canvas
+   * 1 = Event Type, 2 = Event Details, 3 = AI Chat, 4 = Products
    */
   currentStep: WizardStep;
 
   /**
    * Whether the wizard has been completed
-   * Set to true when user reaches the end of the flow
+   * Set to true when user completes checkout
    */
   isComplete: boolean;
 
@@ -143,42 +182,32 @@ export interface DesignWizardState {
 
   /**
    * Selected event type
-   * Helps contextualize AI design generation
+   * Helps contextualize AI design generation and product recommendations
    * @default null
    */
   eventType: EventType | null;
 
   // ============================================================================
-  // Step 2: Product Selection
+  // Step 2: Event Details
   // ============================================================================
 
   /**
-   * Array of selected product IDs
-   * References mockups from the mockups configuration
-   * @example ['tshirt-white-front', 'sweatshirt-black-front']
+   * Event-specific details gathered from user
+   * Dynamic based on selected event type
+   * @default {}
    */
-  selectedProducts: string[];
+  eventDetails: EventDetails;
 
   // ============================================================================
-  // Step 3: Brand Assets (Optional)
+  // Step 3: AI Chat & Design Generation
   // ============================================================================
 
   /**
-   * User's brand assets for design consistency
-   * All fields are optional - user can skip this step
+   * User's brand assets for design consistency (optional - collapsible in Step 3)
+   * All fields are optional
    * @default { logos: [], colors: [], fonts: [], voice: '' }
    */
   brandAssets: BrandAssets;
-
-  /**
-   * Whether user has completed brand assets step
-   * True if user clicked "Continue" (with or without uploading assets)
-   */
-  hasBrandAssets: boolean;
-
-  // ============================================================================
-  // Step 4: AI Chat & Design Generation
-  // ============================================================================
 
   /**
    * Array of designs generated by DALL-E 3
@@ -193,10 +222,28 @@ export interface DesignWizardState {
   selectedDesignId: string | null;
 
   /**
-   * Final design chosen by user to apply to canvas
-   * Set when user clicks "Apply to Canvas" in AI chat step
+   * Final design chosen by user to show on products
+   * Set when user saves design and moves to product selection
    */
   finalDesignUrl: string | null;
+
+  // ============================================================================
+  // Step 4: Product Selection
+  // ============================================================================
+
+  /**
+   * Array of recommended product IDs based on event type and details
+   * Auto-populated when user reaches this step
+   * @example ['tshirt-id-1', 'hoodie-id-2']
+   */
+  recommendedProducts: string[];
+
+  /**
+   * Array of product IDs selected by the user
+   * User can select multiple products to create designs for
+   * @example ['tshirt-id-1', 'hoodie-id-2']
+   */
+  selectedProducts: string[];
 
   // ============================================================================
   // Navigation Actions
@@ -231,35 +278,24 @@ export interface DesignWizardState {
   setEventType: (eventType: EventType) => void;
 
   // ============================================================================
-  // Step 2 Actions: Product Selection
+  // Step 2 Actions: Event Details
   // ============================================================================
 
   /**
-   * Set the array of selected products
-   * @param products - Array of product mockup IDs
+   * Set all event details at once
+   * @param details - Complete event details object
    */
-  setSelectedProducts: (products: string[]) => void;
+  setEventDetails: (details: EventDetails) => void;
 
   /**
-   * Add a single product to the selection
-   * @param productId - Product mockup ID to add
+   * Update a single field in event details
+   * @param field - The field to update
+   * @param value - The new value
    */
-  addProduct: (productId: string) => void;
-
-  /**
-   * Remove a single product from the selection
-   * @param productId - Product mockup ID to remove
-   */
-  removeProduct: (productId: string) => void;
-
-  /**
-   * Toggle a product (add if not selected, remove if selected)
-   * @param productId - Product mockup ID to toggle
-   */
-  toggleProduct: (productId: string) => void;
+  updateEventDetail: <K extends keyof EventDetails>(field: K, value: EventDetails[K]) => void;
 
   // ============================================================================
-  // Step 3 Actions: Brand Assets
+  // Step 3 Actions: Brand Assets (Optional in AI Chat)
   // ============================================================================
 
   /**
@@ -310,14 +346,8 @@ export interface DesignWizardState {
    */
   setVoice: (voice: string) => void;
 
-  /**
-   * Mark brand assets step as completed
-   * @param hasAssets - Whether user uploaded any assets
-   */
-  completeBrandAssets: (hasAssets: boolean) => void;
-
   // ============================================================================
-  // Step 4 Actions: AI Design Generation
+  // Step 3 Actions: AI Design Generation
   // ============================================================================
 
   /**
@@ -351,6 +381,22 @@ export interface DesignWizardState {
   setFinalDesign: (imageUrl: string) => void;
 
   // ============================================================================
+  // Step 4 Actions: Product Recommendations
+  // ============================================================================
+
+  /**
+   * Set recommended products based on event type and details
+   * @param products - Array of recommended product IDs
+   */
+  setRecommendedProducts: (products: string[]) => void;
+
+  /**
+   * Toggle product selection (add if not selected, remove if already selected)
+   * @param productId - Product ID to toggle
+   */
+  toggleProduct: (productId: string) => void;
+
+  // ============================================================================
   // Utility Actions
   // ============================================================================
 
@@ -377,17 +423,18 @@ const initialState = {
   currentStep: WizardStep.EventType,
   isComplete: false,
   eventType: null,
-  selectedProducts: [],
+  eventDetails: {},
   brandAssets: {
     logos: [],
     colors: [],
     fonts: [],
     voice: '',
   },
-  hasBrandAssets: false,
   generatedDesigns: [],
   selectedDesignId: null,
   finalDesignUrl: null,
+  recommendedProducts: [],
+  selectedProducts: [],
 };
 
 /**
@@ -426,8 +473,13 @@ export const useDesignWizard = create<DesignWizardState>()(
 
         nextStep: () => {
           const { currentStep } = get();
-          if (currentStep < WizardStep.Canvas) {
-            set({ currentStep: currentStep + 1 });
+          console.log('[Design Wizard Store] nextStep called, currentStep:', currentStep);
+          if (currentStep < WizardStep.Checkout) {
+            const newStep = currentStep + 1;
+            set({ currentStep: newStep });
+            console.log('[Design Wizard Store] Moved to step:', newStep);
+          } else {
+            console.log('[Design Wizard Store] Already at final step, cannot proceed');
           }
         },
 
@@ -439,7 +491,9 @@ export const useDesignWizard = create<DesignWizardState>()(
         },
 
         goToStep: (step: WizardStep) => {
+          console.log('[Design Wizard Store] goToStep called with step:', step);
           set({ currentStep: step });
+          console.log('[Design Wizard Store] currentStep set to:', step);
         },
 
         // ========================================================================
@@ -451,38 +505,25 @@ export const useDesignWizard = create<DesignWizardState>()(
         },
 
         // ========================================================================
-        // Step 2 Actions: Product Selection
+        // Step 2 Actions: Event Details
         // ========================================================================
 
-        setSelectedProducts: (products: string[]) => {
-          set({ selectedProducts: products });
+        setEventDetails: (details: EventDetails) => {
+          set({ eventDetails: details });
         },
 
-        addProduct: (productId: string) => {
-          const { selectedProducts } = get();
-          if (!selectedProducts.includes(productId)) {
-            set({ selectedProducts: [...selectedProducts, productId] });
-          }
-        },
-
-        removeProduct: (productId: string) => {
-          const { selectedProducts } = get();
+        updateEventDetail: <K extends keyof EventDetails>(field: K, value: EventDetails[K]) => {
+          const { eventDetails } = get();
           set({
-            selectedProducts: selectedProducts.filter(id => id !== productId)
+            eventDetails: {
+              ...eventDetails,
+              [field]: value,
+            },
           });
         },
 
-        toggleProduct: (productId: string) => {
-          const { selectedProducts } = get();
-          if (selectedProducts.includes(productId)) {
-            get().removeProduct(productId);
-          } else {
-            get().addProduct(productId);
-          }
-        },
-
         // ========================================================================
-        // Step 3 Actions: Brand Assets
+        // Step 3 Actions: Brand Assets (Optional in AI Chat)
         // ========================================================================
 
         setBrandAssets: (assets: BrandAssets) => {
@@ -561,12 +602,8 @@ export const useDesignWizard = create<DesignWizardState>()(
           });
         },
 
-        completeBrandAssets: (hasAssets: boolean) => {
-          set({ hasBrandAssets: hasAssets });
-        },
-
         // ========================================================================
-        // Step 4 Actions: AI Design Generation
+        // Step 3 Actions: AI Design Generation
         // ========================================================================
 
         addGeneratedDesign: (design: GeneratedDesign) => {
@@ -608,6 +645,25 @@ export const useDesignWizard = create<DesignWizardState>()(
         },
 
         // ========================================================================
+        // Step 4 Actions: Product Recommendations
+        // ========================================================================
+
+        setRecommendedProducts: (products: string[]) => {
+          set({ recommendedProducts: products });
+        },
+
+        toggleProduct: (productId: string) => {
+          const { selectedProducts } = get();
+          if (selectedProducts.includes(productId)) {
+            // Remove if already selected
+            set({ selectedProducts: selectedProducts.filter(id => id !== productId) });
+          } else {
+            // Add if not selected
+            set({ selectedProducts: [...selectedProducts, productId] });
+          }
+        },
+
+        // ========================================================================
         // Utility Actions
         // ========================================================================
 
@@ -625,12 +681,13 @@ export const useDesignWizard = create<DesignWizardState>()(
           // Only persist essential state, exclude UI-specific state
           currentStep: state.currentStep,
           eventType: state.eventType,
-          selectedProducts: state.selectedProducts,
+          eventDetails: state.eventDetails,
           brandAssets: state.brandAssets,
-          hasBrandAssets: state.hasBrandAssets,
           generatedDesigns: state.generatedDesigns,
           selectedDesignId: state.selectedDesignId,
           finalDesignUrl: state.finalDesignUrl,
+          recommendedProducts: state.recommendedProducts,
+          selectedProducts: state.selectedProducts,
         }),
       }
     ),

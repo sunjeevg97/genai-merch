@@ -21,32 +21,23 @@ import {
   ArrowRight,
   Check,
 } from "lucide-react";
-import { useEffect, useState } from "react";
-import { createBrowserClient } from "@/lib/supabase/client";
+import { useEffect } from "react";
+import { useAuth } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 
 export default function LandingPage() {
   const router = useRouter();
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const { isLoaded, userId } = useAuth();
 
   useEffect(() => {
-    async function checkAuth() {
-      const supabase = createBrowserClient();
-      const { data: { session } } = await supabase.auth.getSession();
-
-      if (session) {
-        // Redirect authenticated users to design wizard
-        router.push('/design/create');
-      } else {
-        setIsCheckingAuth(false);
-      }
+    if (isLoaded && userId) {
+      // Redirect authenticated users to design wizard
+      router.push('/design/create');
     }
-
-    checkAuth();
-  }, [router]);
+  }, [isLoaded, userId, router]);
 
   // Show loading state while checking auth
-  if (isCheckingAuth) {
+  if (!isLoaded) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
@@ -55,6 +46,11 @@ export default function LandingPage() {
         </div>
       </div>
     );
+  }
+
+  // Don't render landing page if authenticated (will redirect)
+  if (userId) {
+    return null;
   }
 
   return (

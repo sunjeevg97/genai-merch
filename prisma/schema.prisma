@@ -10,9 +10,10 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// User accounts (synced with Supabase Auth)
+// User accounts (synced with Clerk via webhooks)
 model User {
   id            String               @id @default(cuid())
+  clerkId       String?              @unique // Clerk user ID for authentication (nullable for migration)
   email         String               @unique
   name          String?
   createdAt     DateTime             @default(now())

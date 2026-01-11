@@ -18,7 +18,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getUser } from '@/lib/supabase/server';
+import { auth } from '@clerk/nextjs/server';
+import { getSupabaseUser } from '@/lib/clerk/server';
 import { prisma } from '@/lib/prisma';
 
 /**
@@ -34,12 +35,21 @@ const saveDesignSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    // 1. Authenticate user
-    const user = await getUser();
-    if (!user) {
+    // 1. Authenticate user with Clerk
+    const { userId: clerkUserId } = await auth();
+    if (!clerkUserId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
+      );
+    }
+
+    // Get Supabase user for database operations
+    const user = await getSupabaseUser(clerkUserId);
+    if (!user) {
+      return NextResponse.json(
+        { error: 'User not found in database' },
+        { status: 404 }
       );
     }
 
@@ -68,18 +78,7 @@ export async function POST(request: NextRequest) {
       aiPrompt,
     });
 
-    // 3. Ensure user exists in database (create if doesn't exist)
-    await prisma.user.upsert({
-      where: { id: user.id },
-      update: {},
-      create: {
-        id: user.id,
-        email: user.email || '',
-        name: user.user_metadata?.name || user.email?.split('@')[0] || 'User',
-      },
-    });
-
-    // 4. Create design record in database
+    // 3. Create design record in database
     const design = await prisma.design.create({
       data: {
         userId: user.id,

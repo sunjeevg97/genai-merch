@@ -10,7 +10,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { getUser } from '@/lib/supabase/server';
+import { auth } from '@clerk/nextjs/server';
+import { getSupabaseUser } from '@/lib/clerk/server';
 import { z } from 'zod';
 
 // Initialize Stripe (lazy-loaded to avoid build-time errors)
@@ -82,8 +83,14 @@ function generateOrderNumber(): string {
 export async function POST(request: NextRequest) {
   try {
     // Get user (optional - allow guest checkout)
-    const user = await getUser();
-    const userId = user?.id || undefined;
+    const { userId: clerkUserId } = await auth();
+    let user = null;
+    let userId: string | undefined = undefined;
+
+    if (clerkUserId) {
+      user = await getSupabaseUser(clerkUserId);
+      userId = user?.id;
+    }
 
     console.log('[Stripe Checkout] Request from user:', userId || 'guest');
 

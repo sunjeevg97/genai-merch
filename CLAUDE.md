@@ -2596,123 +2596,434 @@ ORDER BY "createdAt" DESC;
 
 ## Authentication & Authorization
 
-### Supabase Client Types
+**IMPORTANT**: GenAI-Merch uses **Clerk** for authentication and **Supabase** for database/storage only.
 
-GenAI-Merch uses three types of Supabase clients for different contexts:
+- **Authentication Provider**: Clerk (embedded components, OAuth, webhooks)
+- **Database**: Supabase PostgreSQL via Prisma ORM
+- **User Sync**: Clerk webhooks sync users to Supabase `User` table with `clerkId` field
 
-#### 1. Browser Client (Client Components)
-```tsx
-'use client'
-import { createBrowserClient } from '@/lib/supabase/client'
+### Clerk + Supabase Architecture
 
-export default function MyComponent() {
-  const supabase = createBrowserClient()
-  // Use for client-side operations
-}
 ```
-
-#### 2. Server Client (Server Components & API Routes)
-```tsx
-import { createServerClient } from '@/lib/supabase/client'
-
-export default async function MyPage() {
-  const supabase = await createServerClient()
-  // Use for server-side operations with user context
-}
-```
-
-#### 3. Service Client (Admin Operations)
-```tsx
-import { createServiceClient } from '@/lib/supabase/client'
-
-// ⚠️ Server-side only - bypasses RLS
-const supabase = createServiceClient()
-// Use for admin operations only
+Clerk (Auth Provider)
+    ↓ user.created/user.updated events
+Webhook (/api/webhooks/clerk)
+    ↓ creates/updates
+Supabase User Table (via Prisma)
+    ↓ user.id used in
+Designs, Orders, Carts, etc.
 ```
 
 ### Authentication Patterns
 
-#### Protecting Server Components
-```tsx
-import { requireAuth } from '@/lib/supabase/server'
+#### Client Components (useAuth Hook)
 
-export default async function ProtectedPage() {
-  const user = await requireAuth()
-  // User is guaranteed to be authenticated
-  return <div>Welcome {user.email}</div>
-}
-```
-
-#### Getting User in Server Components
-```tsx
-import { getUser } from '@/lib/supabase/server'
-
-export default async function MyPage() {
-  const user = await getUser()
-  if (!user) {
-    return <div>Please sign in</div>
-  }
-  return <div>Hello {user.email}</div>
-}
-```
-
-#### Client-Side Authentication
 ```tsx
 'use client'
-import { createBrowserClient } from '@/lib/supabase/client'
+import { useAuth } from '@clerk/nextjs'
 
-export default function SignInForm() {
-  const supabase = createBrowserClient()
+export default function MyComponent() {
+  const { userId, isLoaded, isSignedIn } = useAuth()
 
-  const handleSignIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
+  if (!isLoaded) {
+    return <div>Loading...</div>
   }
+
+  if (!isSignedIn) {
+    return <div>Please sign in</div>
+  }
+
+  return <div>User ID: {userId}</div>
 }
 ```
 
-### Route Protection
+**Key Points**:
+- `userId` is the Clerk user ID (matches `clerkId` in database)
+- `isLoaded` indicates auth state is ready
+- `isSignedIn` is true when user is authenticated
+- No async operations needed - hook provides immediate access
 
-Middleware automatically protects routes:
-- **Protected routes**: `/dashboard/*`, `/design/*`, `/orders/*`, `/groups/*`
-- **Public routes**: `/`, `/signin`, `/signup`
-- Unauthenticated users are redirected to `/signin` with return URL
-- Authenticated users accessing `/signin` or `/signup` are redirected to `/dashboard/design`
+#### Server Components (auth Function)
 
-### Authentication Flow
+```tsx
+import { auth } from '@clerk/nextjs/server'
+import { redirect } from 'next/navigation'
 
-1. **Sign Up**: User creates account → Email verification → Account activated
-2. **Sign In**: User signs in → Session created → Redirected to dashboard
-3. **Session Management**: Middleware refreshes sessions automatically
-4. **Sign Out**: User signs out → Session cleared → Redirected to home
+export default async function ProtectedPage() {
+  const { userId } = await auth()
+
+  if (!userId) {
+    redirect('/signin')
+  }
+
+  // Get full user data from database
+  const { prisma } = await import('@/lib/prisma')
+  const user = await prisma.user.findUnique({
+    where: { clerkId: userId }
+  })
+
+  return <div>Welcome {user?.email}</div>
+}
+```
+
+**Helper Function** (`@/lib/clerk/server`):
+```tsx
+import { requireClerkAuth } from '@/lib/clerk/server'
+
+export default async function ProtectedPage() {
+  const clerkUserId = await requireClerkAuth()
+  // Guaranteed to be authenticated (redirects if not)
+
+  const user = await getSupabaseUser(clerkUserId)
+  return <div>Welcome {user?.email}</div>
+}
+```
+
+#### API Routes (auth Function)
+
+```tsx
+import { auth } from '@clerk/nextjs/server'
+import { NextResponse } from 'next/server'
+
+export async function POST(request: Request) {
+  const { userId: clerkUserId } = await auth()
+
+  if (!clerkUserId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // Get Supabase user for database operations
+  const { prisma } = await import('@/lib/prisma')
+  const user = await prisma.user.findUnique({
+    where: { clerkId: clerkUserId }
+  })
+
+  if (!user) {
+    return NextResponse.json({ error: 'User not found' }, { status: 404 })
+  }
+
+  // Use user.id for database operations
+  const design = await prisma.design.create({
+    data: {
+      userId: user.id,
+      name: 'My Design',
+      // ...
+    }
+  })
+
+  return NextResponse.json({ design })
+}
+```
+
+### Clerk Components
+
+#### SignIn Component
+```tsx
+// src/app/(auth)/signin/[[...signin]]/page.tsx
+import { SignIn } from '@clerk/nextjs'
+
+export default function SignInPage() {
+  return (
+    <div className="flex min-h-screen items-center justify-center">
+      <SignIn
+        appearance={{
+          elements: {
+            rootBox: "mx-auto",
+            card: "shadow-lg",
+          }
+        }}
+      />
+    </div>
+  )
+}
+```
+
+**IMPORTANT**: Auth pages must use catch-all routes `[[...param]]` for Clerk's multi-step flows.
+
+#### SignUp Component
+```tsx
+// src/app/(auth)/signup/[[...signup]]/page.tsx
+import { SignUp } from '@clerk/nextjs'
+
+export default function SignUpPage() {
+  return (
+    <div className="flex min-h-screen items-center justify-center">
+      <SignUp
+        appearance={{
+          elements: {
+            rootBox: "mx-auto",
+            card: "shadow-lg",
+          }
+        }}
+      />
+    </div>
+  )
+}
+```
+
+#### UserButton Component
+```tsx
+import { UserButton, SignedIn, SignedOut } from '@clerk/nextjs'
+import { Button } from '@/components/ui/button'
+import Link from 'next/link'
+
+export function Navbar() {
+  return (
+    <header>
+      <SignedOut>
+        <Button asChild>
+          <Link href="/signin">Sign In</Link>
+        </Button>
+      </SignedOut>
+
+      <SignedIn>
+        <UserButton
+          afterSignOutUrl="/"
+          appearance={{
+            elements: {
+              avatarBox: "w-10 h-10"
+            }
+          }}
+        />
+      </SignedIn>
+    </header>
+  )
+}
+```
+
+### Middleware Route Protection
+
+**Location**: `src/middleware.ts` (must be in `src/` directory)
+
+```typescript
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+
+const isProtectedRoute = createRouteMatcher([
+  '/dashboard(.*)',
+  '/design(.*)',
+  '/orders(.*)',
+  '/groups(.*)',
+])
+
+export default clerkMiddleware(async (auth, req) => {
+  if (isProtectedRoute(req)) {
+    await auth.protect()
+  }
+})
+
+export const config = {
+  matcher: [
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    '/(api|trpc)(.*)',
+  ],
+}
+```
+
+**Protected Routes**:
+- `/dashboard/*`, `/design/*`, `/orders/*`, `/groups/*`
+
+**Public Routes**:
+- `/`, `/signin`, `/signup`, `/products`, etc.
+
+**Behavior**:
+- Unauthenticated users are redirected to `/signin`
+- Authenticated users accessing `/signin` or `/signup` are redirected to `/design/create`
+
+### Webhook User Sync
+
+**Endpoint**: `POST /api/webhooks/clerk`
+
+Syncs Clerk users to Supabase `User` table on these events:
+- `user.created` - Creates user in database
+- `user.updated` - Updates user email/name
+- `user.deleted` - Soft delete or cleanup (optional)
+
+**Database Schema**:
+```prisma
+model User {
+  id        String   @id @default(cuid())
+  clerkId   String   @unique  // Clerk user ID
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  designs       Design[]
+  orders        Order[]
+  // ... other relations
+}
+```
+
+**Webhook Implementation** (`src/app/api/webhooks/clerk/route.ts`):
+```typescript
+import { Webhook } from 'svix'
+import { headers } from 'next/headers'
+import { WebhookEvent } from '@clerk/nextjs/server'
+import { prisma } from '@/lib/prisma'
+
+export async function POST(req: Request) {
+  const WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SECRET
+
+  // Verify webhook signature
+  const wh = new Webhook(WEBHOOK_SECRET!)
+  const evt = wh.verify(body, headers) as WebhookEvent
+
+  if (evt.type === 'user.created') {
+    await prisma.user.create({
+      data: {
+        clerkId: evt.data.id,
+        email: evt.data.email_addresses[0].email_address,
+        name: `${evt.data.first_name || ''} ${evt.data.last_name || ''}`.trim() || null,
+      },
+    })
+  }
+
+  if (evt.type === 'user.updated') {
+    await prisma.user.update({
+      where: { clerkId: evt.data.id },
+      data: {
+        email: evt.data.email_addresses[0].email_address,
+        name: `${evt.data.first_name || ''} ${evt.data.last_name || ''}`.trim() || null,
+      },
+    })
+  }
+
+  return NextResponse.json({ received: true })
+}
+```
+
+### Environment Variables
+
+```bash
+# Clerk Configuration
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
+CLERK_SECRET_KEY=sk_test_...
+NEXT_PUBLIC_CLERK_SIGN_IN_URL=/signin
+NEXT_PUBLIC_CLERK_SIGN_UP_URL=/signup
+NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/design/create
+NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/design/create
+
+# Webhook (from Clerk Dashboard)
+CLERK_WEBHOOK_SECRET=whsec_...
+
+# Supabase (database/storage only - NOT auth)
+NEXT_PUBLIC_SUPABASE_URL=https://...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...
+```
+
+### Supabase Database Client
+
+**IMPORTANT**: Supabase is used for **database and storage only**. Authentication is handled by Clerk.
+
+#### Server Client (RLS-enabled queries)
+```tsx
+import { createServerClient } from '@/lib/supabase/server'
+
+export default async function MyPage() {
+  const supabase = await createServerClient()
+
+  // Query with RLS policies applied
+  const { data } = await supabase
+    .from('designs')
+    .select('*')
+    .eq('userId', userId)
+}
+```
+
+#### Service Client (Admin operations)
+```tsx
+import { createServiceClient } from '@/lib/supabase/server'
+
+// ⚠️ Server-side only - bypasses RLS
+const supabase = createServiceClient()
+
+// Admin operations that bypass Row Level Security
+const { data } = await supabase
+  .from('designs')
+  .select('*')
+```
 
 ### Best Practices
 
-1. **Always use the appropriate client type**
-   - Browser client for client components
-   - Server client for server components
-   - Service client only for admin operations
+1. **Use Clerk for all authentication operations**
+   - Sign in/sign up via Clerk components
+   - User state via `useAuth()` hook (client) or `auth()` function (server)
+   - Sign out via Clerk `UserButton` component
 
-2. **Never expose service role key**
-   - Keep service role key server-side only
-   - Never use in client components
+2. **Use Supabase for database/storage only**
+   - Database queries via Prisma ORM (preferred) or Supabase client
+   - File storage via Supabase Storage
+   - **Never** use Supabase auth functions
 
-3. **Leverage Row Level Security (RLS)**
-   - Enable RLS on all tables
-   - Write policies for proper access control
-   - Service client bypasses RLS - use carefully
+3. **User ID mapping**
+   - Clerk `userId` = Database `clerkId` field
+   - Database `id` field = Primary key for relations
+   - Always map Clerk ID to database user:
+     ```tsx
+     const user = await prisma.user.findUnique({
+       where: { clerkId: clerkUserId }
+     })
+     ```
 
-4. **Handle errors gracefully**
-   - Always check for errors in auth operations
-   - Display user-friendly error messages
-   - Log errors for debugging
+4. **Handle webhook sync failures**
+   - Webhook creates users automatically on sign-up
+   - If webhook fails, user may exist in Clerk but not database
+   - Check for null user in API routes and handle gracefully
 
-5. **Validate user sessions**
-   - Middleware handles session refresh
-   - Use `getUser()` or `requireAuth()` in server components
-   - Check authentication status before protected operations
+5. **Environment configuration**
+   - Use separate Clerk projects for development/production
+   - Configure webhook endpoints in Clerk Dashboard
+   - Test webhooks with Clerk Dashboard webhook tester
+
+6. **Catch-all routes for auth pages**
+   - Auth pages **must** use `[[...param]]` syntax
+   - Example: `/app/(auth)/signin/[[...signin]]/page.tsx`
+   - Allows Clerk to handle multi-step flows (OAuth, email verification)
+
+7. **Middleware location**
+   - Middleware **must** be at `src/middleware.ts` when using `src/` directory
+   - DO NOT place at root `middleware.ts`
+
+### Migration from Supabase Auth
+
+If migrating from Supabase Auth to Clerk:
+
+1. **Install Clerk packages**
+   ```bash
+   npm install @clerk/nextjs svix
+   ```
+
+2. **Update Prisma schema**
+   ```prisma
+   model User {
+     clerkId String @unique  // Add this field
+     // ... existing fields
+   }
+   ```
+
+   Run migration:
+   ```bash
+   npx prisma migrate dev --name add_clerk_id
+   ```
+
+3. **Configure Clerk**
+   - Enable email/password + OAuth providers
+   - Set redirect URLs
+   - Create webhook endpoint for user sync
+
+4. **Update all auth code**
+   - Replace `createBrowserClient()` → `useAuth()` hook
+   - Replace `getUser()` → `auth()` function
+   - Replace `requireAuth()` → `requireClerkAuth()`
+   - Update API routes to use `auth()` and map to database user
+
+5. **Test thoroughly**
+   - Sign up flow and webhook sync
+   - Sign in/out with redirects
+   - Protected routes
+   - API route authentication
+   - Client component auth state
 
 ---
 

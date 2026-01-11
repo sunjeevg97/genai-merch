@@ -44,7 +44,7 @@ import {
 import { toast } from 'sonner';
 import { useDropzone } from 'react-dropzone';
 import { uploadDesignFile } from '@/lib/supabase/storage';
-import { createBrowserClient } from '@/lib/supabase/client';
+import { useAuth } from '@clerk/nextjs';
 import Image from 'next/image';
 import { createAppError, getErrorMessage, isRetryableError, ErrorType, type AppError } from '@/lib/utils/errors';
 import { logError } from '@/lib/utils/errors';
@@ -68,6 +68,9 @@ export function CanvasStep() {
     complete,
   } = useDesignWizard();
 
+  // Clerk authentication
+  const { userId } = useAuth();
+
   // Canvas refs and state
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const canvasInstanceRef = useRef<fabric.Canvas | null>(null);
@@ -76,7 +79,6 @@ export function CanvasStep() {
   const [isCanvasReady, setIsCanvasReady] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [hasLoadedDesign, setHasLoadedDesign] = useState(false);
   const [isLoadingDesign, setIsLoadingDesign] = useState(false);
@@ -98,22 +100,6 @@ export function CanvasStep() {
       hasBrandColors: brandAssets.colors.length > 0,
     });
   }, [finalDesignUrl, selectedDesignId, generatedDesigns.length, firstBrandLogo, eventType, brandAssets.colors.length]);
-
-  /**
-   * Get current user ID
-   */
-  useEffect(() => {
-    const getUser = async () => {
-      const supabase = createBrowserClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (user) {
-        setUserId(user.id);
-      }
-    };
-    getUser();
-  }, []);
 
   /**
    * Set default mockup on mount

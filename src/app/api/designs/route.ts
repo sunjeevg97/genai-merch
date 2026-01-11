@@ -5,17 +5,27 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getUser } from '@/lib/supabase/server';
+import { auth } from '@clerk/nextjs/server';
+import { getSupabaseUser } from '@/lib/clerk/server';
 import { prisma } from '@/lib/prisma';
 
 export async function GET(request: NextRequest) {
   try {
-    // 1. Authenticate user
-    const user = await getUser();
-    if (!user) {
+    // 1. Authenticate user with Clerk
+    const { userId: clerkUserId } = await auth();
+    if (!clerkUserId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
+      );
+    }
+
+    // Get Supabase user for database operations
+    const user = await getSupabaseUser(clerkUserId);
+    if (!user) {
+      return NextResponse.json(
+        { error: 'User not found in database' },
+        { status: 404 }
       );
     }
 

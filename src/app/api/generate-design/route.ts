@@ -13,7 +13,8 @@ import { NextRequest } from 'next/server';
 import OpenAI from 'openai';
 import { z } from 'zod';
 import { buildImageGenerationPrompt, type DesignContext } from '@/lib/ai/prompts';
-import { getUser } from '@/lib/supabase/server';
+import { auth } from '@clerk/nextjs/server';
+import { getSupabaseUser } from '@/lib/clerk/server';
 import { uploadGeneratedDesign } from '@/lib/supabase/storage-server';
 import type { EventType } from '@/lib/store/design-wizard';
 
@@ -97,13 +98,25 @@ export async function POST(request: NextRequest) {
   const startTime = Date.now();
 
   try {
-    // 1. Authenticate user
-    const user = await getUser();
-    if (!user) {
+    // 1. Authenticate user with Clerk
+    const { userId: clerkUserId } = await auth();
+    if (!clerkUserId) {
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
         {
           status: 401,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    // Get Supabase user for database operations
+    const user = await getSupabaseUser(clerkUserId);
+    if (!user) {
+      return new Response(
+        JSON.stringify({ error: 'User not found in database' }),
+        {
+          status: 404,
           headers: { 'Content-Type': 'application/json' },
         }
       );
@@ -251,17 +264,8 @@ export async function POST(request: NextRequest) {
 
         const { prisma } = await import('@/lib/prisma');
 
-        // Ensure user exists in database
-        await prisma.user.upsert({
-          where: { id: user.id },
-          update: {},
-          create: {
-            id: user.id,
-            email: user.email || '',
-            name: user.user_metadata?.name || user.email?.split('@')[0] || 'User',
-          },
-        });
-
+        // User should already exist from Clerk webhook
+        // Create design record
         savedDesign = await prisma.design.create({
           data: {
             userId: user.id,

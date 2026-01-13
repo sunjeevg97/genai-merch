@@ -22,7 +22,7 @@ import { Upload, X, Plus, Loader2, AlertCircle, RefreshCw, CheckCircle } from 'l
 import Image from 'next/image';
 import { toast } from 'sonner';
 import { uploadDesignFile } from '@/lib/supabase/storage';
-import { createBrowserClient } from '@/lib/supabase/client';
+import { useAuth } from '@clerk/nextjs';
 import { createAppError, getErrorMessage, isRetryableError, ErrorType, type AppError } from '@/lib/utils/errors';
 import { logError } from '@/lib/utils/errors';
 
@@ -57,31 +57,19 @@ export function BrandAssetsStep() {
     previousStep,
   } = useDesignWizard();
 
+  // Clerk authentication
+  const { userId } = useAuth();
+
   // Local state
   const [uploadedLogos, setUploadedLogos] = useState<UploadedLogo[]>([]);
   const [colors, setColors] = useState<string[]>(brandAssets.colors);
   const [voice, setVoiceInput] = useState(brandAssets.voice);
   const [isUploading, setIsUploading] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<AppError | null>(null);
 
   // Character counter
   const maxVoiceChars = 500;
   const remainingChars = maxVoiceChars - voice.length;
-
-  /**
-   * Get current user ID
-   */
-  useEffect(() => {
-    const getUser = async () => {
-      const supabase = createBrowserClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        setUserId(user.id);
-      }
-    };
-    getUser();
-  }, []);
 
   /**
    * Initialize uploaded logos from Zustand store

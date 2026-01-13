@@ -13,7 +13,9 @@
 
 'use client';
 
-import { Suspense } from 'react';
+import { Suspense, useEffect } from 'react';
+import { useAuth } from '@clerk/nextjs';
+import { useRouter } from 'next/navigation';
 import { DesignWizard } from '@/components/design/design-wizard';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -43,6 +45,26 @@ function WizardLoading() {
  * Wrapped in Suspense to support useSearchParams() for direct step navigation.
  */
 export default function CreateDesignPage() {
+  const { isLoaded, userId } = useAuth();
+  const router = useRouter();
+
+  // Redirect to signin if not authenticated
+  useEffect(() => {
+    if (isLoaded && !userId) {
+      router.push('/signin');
+    }
+  }, [isLoaded, userId, router]);
+
+  // Show loading while checking auth
+  if (!isLoaded) {
+    return <WizardLoading />;
+  }
+
+  // Don't render if not authenticated (will redirect)
+  if (!userId) {
+    return null;
+  }
+
   return (
     <Suspense fallback={<WizardLoading />}>
       <DesignWizard />

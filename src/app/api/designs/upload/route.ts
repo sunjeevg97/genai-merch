@@ -57,7 +57,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getUser, createServerClient } from '@/lib/supabase/server';
+import { createServerClient } from '@/lib/supabase/server';
+import { auth } from '@clerk/nextjs/server';
+import { getSupabaseUser } from '@/lib/clerk/server';
 
 // Constants
 const DESIGNS_BUCKET = 'designs';
@@ -115,14 +117,23 @@ export async function POST(request: NextRequest) {
   const startTime = Date.now();
 
   try {
-    // 1. Authenticate user
-    const user = await getUser();
-
-    if (!user) {
-      console.log('[Upload] Authentication failed - No user session');
+    // 1. Authenticate user with Clerk
+    const { userId: clerkUserId } = await auth();
+    if (!clerkUserId) {
+      console.log('[Upload] Authentication failed - No Clerk session');
       return NextResponse.json(
         { success: false, error: 'Not authenticated' },
         { status: 401 }
+      );
+    }
+
+    // Get Supabase user for database operations
+    const user = await getSupabaseUser(clerkUserId);
+    if (!user) {
+      console.log('[Upload] User not found in database');
+      return NextResponse.json(
+        { success: false, error: 'User not found in database' },
+        { status: 404 }
       );
     }
 

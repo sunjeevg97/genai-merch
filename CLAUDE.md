@@ -2606,13 +2606,82 @@ ORDER BY "createdAt" DESC;
 
 ```
 Clerk (Auth Provider)
-    ↓ user.created/user.updated events
+    ↓ user.created/user.updated events (Primary Path)
 Webhook (/api/webhooks/clerk)
     ↓ creates/updates
 Supabase User Table (via Prisma)
     ↓ user.id used in
 Designs, Orders, Carts, etc.
+
+────────────────────────────────────────
+Fallback Path (if webhook delayed/fails):
+Clerk (Auth Provider)
+    ↓ API request with clerkUserId
+getSupabaseUser(clerkUserId)
+    ↓ user not found → fetch from Clerk API
+    ↓ auto-create in database
+Supabase User Table (via Prisma)
 ```
+
+### Auto-Sync Fallback Mechanism
+
+**Problem**: Webhooks can be delayed or fail, causing "User not found in database" errors when users try to use the app immediately after signup.
+
+**Solution**: The `getSupabaseUser()` helper automatically creates users on-demand by fetching data from Clerk API.
+
+**How It Works**:
+
+1. **Check database first**: `prisma.user.findUnique({ where: { clerkId } })`
+2. **If user doesn't exist**: Fetch user details from Clerk API via `clerkClient().users.getUser(clerkUserId)`
+3. **Extract user data**: Email (primary), firstName, lastName
+4. **Create in database**: `prisma.user.create({ clerkId, email, name })`
+5. **Return user**: Ready for immediate use
+
+**Code Example** (`@/lib/clerk/server`):
+```typescript
+export async function getSupabaseUser(clerkUserId: string) {
+  // Check database
+  let user = await prisma.user.findUnique({
+    where: { clerkId: clerkUserId },
+  });
+
+  // Auto-create if missing (webhook fallback)
+  if (!user) {
+    const client = await clerkClient();
+    const clerkUser = await client.users.getUser(clerkUserId);
+
+    const email = clerkUser.emailAddresses.find(
+      (e) => e.id === clerkUser.primaryEmailAddressId
+    )?.emailAddress;
+
+    user = await prisma.user.create({
+      data: {
+        clerkId: clerkUserId,
+        email,
+        name: `${clerkUser.firstName} ${clerkUser.lastName}`.trim(),
+      },
+    });
+  }
+
+  return user;
+}
+```
+
+**Benefits**:
+- ✅ **Zero downtime**: Users can use the app immediately after signup
+- ✅ **Resilient**: Works even if webhooks fail or are delayed
+- ✅ **Transparent**: Users never see "User not found" errors
+- ✅ **Idempotent**: Safe to call multiple times (checks database first)
+
+**When to Use**:
+- All API routes that need database user records
+- Server components that display user data
+- Background jobs that operate on user data
+
+**Best Practices**:
+- Always use `getSupabaseUser()` instead of direct Prisma queries for Clerk users
+- Webhook remains the primary sync mechanism (event-driven, instant)
+- Auto-sync is a defensive fallback (on-demand, reliable)
 
 ### Authentication Patterns
 

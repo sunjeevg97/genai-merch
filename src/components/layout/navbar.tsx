@@ -23,33 +23,35 @@ export function Navbar() {
         <div className="flex h-16 items-center justify-between">
           {/* Logo - conditional link based on auth state and current page */}
           {/* Always clickable on auth pages, otherwise only when signed out */}
-          {pathname === '/signin' || pathname === '/signup' ? (
-            <Link href="/" className="flex items-center space-x-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary">
-                <Sparkles className="h-5 w-5 text-primary-foreground" />
-              </div>
-              <span className="text-xl font-bold">Regalia</span>
-            </Link>
-          ) : (
-            <>
-              <SignedOut>
-                <Link href="/" className="flex items-center space-x-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary">
-                    <Sparkles className="h-5 w-5 text-primary-foreground" />
-                  </div>
-                  <span className="text-xl font-bold">Regalia</span>
-                </Link>
-              </SignedOut>
-              <SignedIn>
-                <div className="flex items-center space-x-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary">
-                    <Sparkles className="h-5 w-5 text-primary-foreground" />
-                  </div>
-                  <span className="text-xl font-bold">Regalia</span>
+          <div suppressHydrationWarning>
+            {pathname === '/signin' || pathname === '/signup' ? (
+              <Link href="/" className="flex items-center space-x-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary">
+                  <Sparkles className="h-5 w-5 text-primary-foreground" />
                 </div>
-              </SignedIn>
-            </>
-          )}
+                <span className="text-xl font-bold">Regalia</span>
+              </Link>
+            ) : (
+              <>
+                <SignedOut>
+                  <Link href="/" className="flex items-center space-x-2">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary">
+                      <Sparkles className="h-5 w-5 text-primary-foreground" />
+                    </div>
+                    <span className="text-xl font-bold">Regalia</span>
+                  </Link>
+                </SignedOut>
+                <SignedIn>
+                  <div className="flex items-center space-x-2">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary">
+                      <Sparkles className="h-5 w-5 text-primary-foreground" />
+                    </div>
+                    <span className="text-xl font-bold">Regalia</span>
+                  </div>
+                </SignedIn>
+              </>
+            )}
+          </div>
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex md:items-center md:space-x-8">
@@ -65,7 +67,7 @@ export function Navbar() {
           </div>
 
           {/* Desktop CTA Buttons */}
-          <div className="hidden md:flex md:items-center md:space-x-4">
+          <div className="hidden md:flex md:items-center md:space-x-4" suppressHydrationWarning>
             <SignedOut>
               <Button variant="ghost" asChild>
                 <Link href="/signin">Sign In</Link>
@@ -118,7 +120,7 @@ export function Navbar() {
                 {link.label}
               </a>
             ))}
-            <div className="mt-4 space-y-2">
+            <div className="mt-4 space-y-2" suppressHydrationWarning>
               <SignedOut>
                 <Button variant="outline" className="w-full" asChild>
                   <Link href="/signin">Sign In</Link>

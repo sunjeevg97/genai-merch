@@ -137,11 +137,11 @@ export function AddToCartForm({ product, selectedVariant, design }: AddToCartFor
           {selectedVariant && (
             <div className="text-right">
               {selectedVariant.inStock ? (
-                <span className="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-800">
+                <span className="inline-flex items-center rounded-full bg-success/10 px-3 py-1 text-sm font-medium text-success">
                   In Stock
                 </span>
               ) : (
-                <span className="inline-flex items-center rounded-full bg-red-100 px-3 py-1 text-sm font-medium text-red-800">
+                <span className="inline-flex items-center rounded-full bg-destructive/10 px-3 py-1 text-sm font-medium text-destructive">
                   Out of Stock
                 </span>
               )}

@@ -10,6 +10,7 @@
  */
 
 import { fabric } from 'fabric';
+import { getThemeColorAsHex, getThemeColorWithAlpha } from '@/lib/utils/colors';
 
 /**
  * Print Area Interface
@@ -77,15 +78,20 @@ export function initializeCanvas(
       throw new Error('Canvas dimensions must be positive');
     }
 
+    // Get theme colors for canvas styling
+    const bgColor = options?.backgroundColor || getThemeColorAsHex('--muted', '#141414');
+    const selectionColor = options?.selectionColor || getThemeColorWithAlpha('--primary', 0.2, 'rgba(6, 182, 212, 0.2)');
+    const selectionBorderColor = options?.selectionBorderColor || getThemeColorAsHex('--primary', '#06B6D4');
+
     // Create Fabric.js canvas
     const canvas = new fabric.Canvas(canvasElement, {
       width,
       height,
-      backgroundColor: options?.backgroundColor || '#ffffff',
+      backgroundColor: bgColor,
       preserveObjectStacking: options?.preserveObjectStacking ?? true,
       selection: true,
-      selectionColor: options?.selectionColor || 'rgba(100, 150, 255, 0.3)',
-      selectionBorderColor: options?.selectionBorderColor || '#4a90e2',
+      selectionColor: selectionColor,
+      selectionBorderColor: selectionBorderColor,
       selectionLineWidth: 2,
     });
 
@@ -221,14 +227,18 @@ export function setupPrintAreaBounds(
   try {
     console.log('[Canvas] Setting up print area bounds:', printArea);
 
+    // Get theme colors for print area bounds
+    const fillColor = options?.fill || getThemeColorWithAlpha('--primary', 0.05, 'rgba(6, 182, 212, 0.05)');
+    const strokeColor = options?.stroke || getThemeColorAsHex('--primary', '#06B6D4');
+
     // Create boundary rectangle
     const boundsRect = new fabric.Rect({
       left: printArea.x,
       top: printArea.y,
       width: printArea.width,
       height: printArea.height,
-      fill: options?.fill || 'rgba(100, 150, 255, 0.05)',
-      stroke: options?.stroke || '#4a90e2',
+      fill: fillColor,
+      stroke: strokeColor,
       strokeWidth: options?.strokeWidth || 2,
       strokeDashArray: options?.strokeDashArray || [5, 5],
       selectable: false,

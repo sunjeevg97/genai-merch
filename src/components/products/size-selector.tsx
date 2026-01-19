@@ -49,7 +49,7 @@ export function SizeSelector({ sizes, selectedSize, onSizeChange }: SizeSelector
       </Tabs>
 
       {selectedSize && !sizes.find((s) => s.value === selectedSize)?.available && (
-        <p className="text-sm text-red-600">This size is currently out of stock</p>
+        <p className="text-sm text-destructive">This size is currently out of stock</p>
       )}
     </div>
   );

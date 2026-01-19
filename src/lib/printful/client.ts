@@ -299,15 +299,22 @@ export class PrintfulClient {
     );
 
     // V2 API response is wrapped in result but has different structure
-    const response = apiResponse.result as any;
+    const response = apiResponse.result || apiResponse;
 
-    console.log('[Printful] getMockupStyles - Response keys:', Object.keys(response));
+    console.log('[Printful] getMockupStyles - Response:', response ? 'exists' : 'null');
+    console.log('[Printful] getMockupStyles - Response keys:', response ? Object.keys(response) : 'no keys');
 
     // V2 API structure: response contains { data, extra, paging, _links }
     // Each data item is a placement with mockup_styles array
+    if (!response) {
+      console.error('[Printful] getMockupStyles - Response is null or undefined');
+      console.log('[Printful] getMockupStyles - Full apiResponse:', JSON.stringify(apiResponse, null, 2));
+      throw new Error('Printful v2 API returned null/undefined response');
+    }
+
     if (!response.data || !Array.isArray(response.data)) {
       console.error('[Printful] getMockupStyles - Invalid response structure');
-      console.log('[Printful] getMockupStyles - Full response:', JSON.stringify(response, null, 2));
+      console.log('[Printful] getMockupStyles - Response structure:', JSON.stringify(response, null, 2));
       throw new Error('Printful v2 API returned unexpected structure - missing data array');
     }
 

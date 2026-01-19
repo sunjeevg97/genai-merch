@@ -136,15 +136,15 @@ export function MockupStyleSelector({
   // Error state
   if (error) {
     return (
-      <Card className="border-red-200 bg-red-50">
+      <Card className="border-destructive/50 bg-destructive/10">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg text-red-900">
+          <CardTitle className="flex items-center gap-2 text-lg text-destructive">
             <AlertCircle className="h-5 w-5" />
             Failed to Load Styles
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-red-700">{error}</p>
+          <p className="text-sm text-destructive">{error}</p>
         </CardContent>
       </Card>
     );
@@ -198,7 +198,7 @@ export function MockupStyleSelector({
                 {/* Status indicator badge */}
                 {isGenerated && (
                   <div className="absolute top-2 right-2">
-                    <Check className="h-4 w-4 text-green-600" />
+                    <Check className="h-4 w-4 text-success" />
                   </div>
                 )}
                 {isGenerating && (

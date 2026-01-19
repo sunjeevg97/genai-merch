@@ -31,7 +31,7 @@ export function CartSummary({ subtotal, itemCount }: CartSummaryProps) {
       <CardContent className="space-y-4">
         {/* Item Count */}
         <div className="flex justify-between text-sm">
-          <span className="text-gray-600">
+          <span className="text-muted-foreground">
             Items ({itemCount} {itemCount === 1 ? 'item' : 'items'})
           </span>
           <span className="font-medium">{formatPrice(subtotal)}</span>
@@ -39,14 +39,14 @@ export function CartSummary({ subtotal, itemCount }: CartSummaryProps) {
 
         {/* Shipping */}
         <div className="flex justify-between text-sm">
-          <span className="text-gray-600">Shipping</span>
-          <span className="text-gray-500 italic">Calculated at checkout</span>
+          <span className="text-muted-foreground">Shipping</span>
+          <span className="text-muted-foreground italic">Calculated at checkout</span>
         </div>
 
         {/* Tax */}
         <div className="flex justify-between text-sm">
-          <span className="text-gray-600">Estimated Tax</span>
-          <span className="text-gray-500 italic">Calculated at checkout</span>
+          <span className="text-muted-foreground">Estimated Tax</span>
+          <span className="text-muted-foreground italic">Calculated at checkout</span>
         </div>
 
         <Separator />
@@ -58,13 +58,13 @@ export function CartSummary({ subtotal, itemCount }: CartSummaryProps) {
         </div>
 
         {/* Disclaimer */}
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-muted-foreground">
           Final shipping cost and tax will be calculated during checkout based on your
           delivery address.
         </p>
       </CardContent>
 
-      <CardFooter className="text-xs text-gray-500">
+      <CardFooter className="text-xs text-muted-foreground">
         <p>
           Prices are in USD. All products are printed and shipped by our fulfillment
           partner.

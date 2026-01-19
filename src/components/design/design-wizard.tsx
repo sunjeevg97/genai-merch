@@ -14,16 +14,26 @@
 
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useDesignWizard, WizardStep } from '@/lib/store/design-wizard';
 import { EventTypeStep } from '@/components/design/steps/event-type-step';
 import { EventDetailsStep } from '@/components/design/steps/event-details-step';
-import { ChatStep } from '@/components/design/steps/chat-step';
+import { ChatStep } from '@/components/design/steps/chat-step-new';
 import { ProductShowcaseStep } from '@/components/design/steps/product-showcase-step';
 import { CheckoutStep } from '@/components/design/steps/checkout-step';
-import { Check, Circle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { ArrowLeft, Check, RotateCcw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 
 /**
  * Step Configuration
@@ -51,8 +61,9 @@ const STEPS: StepConfig[] = [
  * ```
  */
 export function DesignWizard() {
-  const { currentStep, goToStep } = useDesignWizard();
+  const { currentStep, previousStep, nextStep, resetWizard, goToStep } = useDesignWizard();
   const searchParams = useSearchParams();
+  const [isRestartDialogOpen, setIsRestartDialogOpen] = useState(false);
 
   /**
    * Handle direct navigation via query parameter
@@ -100,131 +111,126 @@ export function DesignWizard() {
     }
   };
 
-  /**
-   * Get step status
-   */
-  const getStepStatus = (step: WizardStep): 'completed' | 'current' | 'upcoming' => {
-    if (step < currentStep) return 'completed';
-    if (step === currentStep) return 'current';
-    return 'upcoming';
-  };
-
   return (
     <div className="min-h-screen bg-background">
-      {/* Header with Progress Indicator */}
-      <div className="border-b bg-card sticky top-0 z-10 shadow-sm">
-        <div className="container mx-auto px-4 py-4 max-w-7xl">
-          <div className="space-y-3">
-            {/* Title */}
-            <div>
-              <h1 className="text-2xl font-bold">Design Wizard</h1>
-              <p className="text-sm text-muted-foreground">
-                Create custom designs with AI assistance
-              </p>
-            </div>
+      {/* Main Content with Transitions */}
+      <div className="container mx-auto px-4 py-8 max-w-7xl">
+        {/* Screen reader announcement */}
+        <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+          Step {currentStep} of {STEPS.length}: {STEPS.find(s => s.step === currentStep)?.label}
+        </div>
 
-            {/* Progress Indicator */}
-            <div className="space-y-3">
-              {/* Step Badges */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 flex-wrap">
-                  {STEPS.map((stepConfig, index) => {
-                    const status = getStepStatus(stepConfig.step);
-                    const isCompleted = status === 'completed';
-                    const isCurrent = status === 'current';
-
-                    return (
-                      <div
-                        key={stepConfig.step}
-                        className="flex items-center gap-2"
-                      >
-                        {/* Step Badge */}
-                        <div
-                          className={`
-                            flex items-center gap-2 px-3 py-1.5 rounded-full
-                            transition-all duration-200
-                            ${
-                              isCompleted
-                                ? 'bg-primary text-primary-foreground'
-                                : isCurrent
-                                ? 'bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2'
-                                : 'bg-muted text-muted-foreground'
-                            }
-                          `}
-                        >
-                          {/* Icon */}
-                          <div className="flex-shrink-0">
-                            {isCompleted ? (
-                              <Check className="h-4 w-4" />
-                            ) : (
-                              <Circle
-                                className={`h-4 w-4 ${isCurrent ? 'fill-current' : ''}`}
-                              />
-                            )}
-                          </div>
-
-                          {/* Label */}
-                          <span className="text-xs font-medium whitespace-nowrap">
-                            <span className="hidden sm:inline">
-                              {stepConfig.label}
-                            </span>
-                            <span className="sm:hidden">
-                              {stepConfig.shortLabel}
-                            </span>
-                          </span>
-                        </div>
-
-                        {/* Connector Line */}
-                        {index < STEPS.length - 1 && (
-                          <div
-                            className={`
-                              hidden md:block w-8 h-0.5 transition-colors duration-200
-                              ${
-                                isCompleted
-                                  ? 'bg-primary'
-                                  : 'bg-border'
-                              }
-                            `}
-                          />
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Step Counter */}
-                <div className="text-xs text-muted-foreground whitespace-nowrap ml-4">
-                  Step {currentStep} of {STEPS.length}
-                </div>
+        {/* Unified Sticky Header */}
+        <div className="sticky top-0 z-20 bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60 border-b">
+          <div className="container mx-auto px-4 py-3 max-w-7xl">
+            <div className="flex items-center justify-between gap-4">
+              {/* Left: Back Button */}
+              <div className="shrink-0">
+                {currentStep > 1 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      previousStep();
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className="gap-1.5"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    <span className="hidden sm:inline">Back</span>
+                  </Button>
+                )}
               </div>
 
-              {/* Progress Bar */}
-              <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
-                <motion.div
-                  className="h-full bg-primary rounded-full"
-                  initial={{ width: 0 }}
-                  animate={{ width: `${((currentStep - 1) / (STEPS.length - 1)) * 100}%` }}
-                  transition={{ duration: 0.3, ease: 'easeInOut' }}
-                />
+              {/* Center: Visual Progress Dots */}
+              <div className="flex-1 flex items-center justify-center gap-2">
+                {[1, 2, 3, 4, 5].map((step) => (
+                  <div key={step} className="flex items-center gap-2">
+                    <button
+                      onClick={() => step < currentStep && goToStep(step as WizardStep)}
+                      disabled={step > currentStep}
+                      className={`
+                        relative flex items-center justify-center
+                        w-8 h-8 rounded-full text-xs font-medium
+                        transition-all duration-200
+                        ${step < currentStep
+                          ? 'bg-primary text-primary-foreground cursor-pointer hover:scale-110'
+                          : step === currentStep
+                          ? 'bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2 ring-offset-background'
+                          : 'bg-muted text-muted-foreground cursor-not-allowed'
+                        }
+                      `}
+                    >
+                      {step < currentStep ? (
+                        <Check className="h-4 w-4" />
+                      ) : (
+                        <span>{step}</span>
+                      )}
+                    </button>
+                    {step < 5 && (
+                      <div className={`
+                        hidden sm:block w-8 h-0.5
+                        ${step < currentStep ? 'bg-primary' : 'bg-muted'}
+                      `} />
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Right: Restart Icon Button */}
+              <div className="shrink-0">
+                {currentStep < 5 && (
+                  <Dialog open={isRestartDialogOpen} onOpenChange={setIsRestartDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground">
+                        <RotateCcw className="h-4 w-4" />
+                        <span className="sr-only">Restart</span>
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Restart Design Wizard?</DialogTitle>
+                        <DialogDescription>
+                          This will clear all your selections and start fresh. This action cannot be undone.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsRestartDialogOpen(false)}>
+                          Cancel
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          onClick={() => {
+                            resetWizard();
+                            setIsRestartDialogOpen(false);
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                          }}
+                        >
+                          Restart
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                )}
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Main Content with Transitions */}
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={currentStep}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.3, ease: 'easeInOut' }}
-          >
-            {renderStep()}
-          </motion.div>
-        </AnimatePresence>
+        {/* Content Area with Spacing */}
+        <div className="mt-8">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentStep}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3, ease: 'easeInOut' }}
+            >
+              {renderStep()}
+            </motion.div>
+          </AnimatePresence>
+        </div>
       </div>
     </div>
   );

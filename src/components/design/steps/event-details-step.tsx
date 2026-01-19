@@ -8,9 +8,9 @@
 
 'use client';
 
+import { useState } from 'react';
 import { useDesignWizard, type EventType } from '@/lib/store/design-wizard';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -21,6 +21,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import {
+  Heart,
+  Trophy,
+  Building2,
+  Home,
+  GraduationCap,
+  Sparkles,
+  Users,
+  Palette,
+} from 'lucide-react';
 
 /**
  * Event Details Step Component
@@ -33,9 +45,12 @@ export function EventDetailsStep() {
     eventType,
     eventDetails,
     updateEventDetail,
-    previousStep,
     nextStep,
   } = useDesignWizard();
+
+  // Character counter state for Description field
+  const [descriptionLength, setDescriptionLength] = useState(0);
+  const MAX_DESCRIPTION_LENGTH = 500;
 
   /**
    * Validate form based on event type
@@ -90,11 +105,11 @@ export function EventDetailsStep() {
   }
 
   return (
-    <div className="w-full max-w-3xl mx-auto space-y-8">
+    <div className="w-full max-w-4xl mx-auto space-y-4">
       {/* Header */}
-      <div className="text-center space-y-2">
-        <h2 className="text-3xl font-bold tracking-tight">Tell us about your event</h2>
-        <p className="text-lg text-muted-foreground">
+      <div className="space-y-1">
+        <h2 className="text-2xl font-bold tracking-tight">Tell us about your event</h2>
+        <p className="text-sm text-muted-foreground">
           These details help us recommend the perfect products and create custom designs
         </p>
       </div>
@@ -102,16 +117,27 @@ export function EventDetailsStep() {
       {/* Form Card */}
       <Card>
         <CardHeader>
-          <CardTitle>Event Details</CardTitle>
-          <CardDescription>
-            Share some information to personalize your experience
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Event Details</CardTitle>
+              <CardDescription>
+                Share some information to personalize your experience
+              </CardDescription>
+            </div>
+            <Badge variant="secondary" className="gap-1.5">
+              {getEventTypeIcon(eventType)}
+              {getEventTypeLabel(eventType)}
+            </Badge>
+          </div>
         </CardHeader>
 
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-4">
           {/* Common Fields - All Event Types */}
+          <Separator className="bg-muted-foreground/20 h-[2px]" />
+
           <div className="space-y-2">
-            <Label htmlFor="name">
+            <Label htmlFor="name" className="flex items-center gap-1.5">
+              <Sparkles className="h-4 w-4 text-primary" />
               Event/Organization Name <span className="text-destructive">*</span>
             </Label>
             <Input
@@ -124,71 +150,94 @@ export function EventDetailsStep() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="description">Brief Description</Label>
+            <Label htmlFor="description" className="flex items-center gap-1.5">
+              <Palette className="h-4 w-4 text-muted-foreground" />
+              Brief Description
+            </Label>
             <Textarea
               id="description"
               placeholder="Tell us more about your event..."
               value={eventDetails.description || ''}
-              onChange={(e) => updateEventDetail('description', e.target.value)}
-              rows={3}
+              onChange={(e) => {
+                updateEventDetail('description', e.target.value);
+                setDescriptionLength(e.target.value.length);
+              }}
+              rows={2}
+              maxLength={MAX_DESCRIPTION_LENGTH}
             />
+            <p className="text-xs text-muted-foreground text-right">
+              {descriptionLength}/{MAX_DESCRIPTION_LENGTH} characters
+            </p>
           </div>
 
-          {/* Event Type-Specific Fields */}
-          {eventType === 'charity' && <CharityFields />}
-          {eventType === 'sports' && <SportsFields />}
-          {eventType === 'company' && <CompanyFields />}
-          {eventType === 'family' && <FamilyFields />}
-          {eventType === 'school' && <SchoolFields />}
+          <Separator className="my-6" />
 
-          {/* Common Optional Fields */}
-          <div className="space-y-2">
-            <Label htmlFor="targetAudience">Who will use/wear these items?</Label>
-            <Input
-              id="targetAudience"
-              placeholder="e.g., Adults, kids, all ages"
-              value={eventDetails.targetAudience || ''}
-              onChange={(e) => updateEventDetail('targetAudience', e.target.value)}
-            />
-          </div>
+          {/* Event-Specific Section with subtle background */}
+          {(eventType === 'charity' || eventType === 'sports' || eventType === 'company' || eventType === 'family' || eventType === 'school') && (
+            <div className="rounded-lg bg-muted/30 p-4 space-y-4">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                {getEventTypeIcon(eventType)}
+                <span>{getEventTypeLabel(eventType)} Details</span>
+              </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="tone">Desired style/tone</Label>
-            <Select
-              value={eventDetails.tone || ''}
-              onValueChange={(value) => updateEventDetail('tone', value)}
-            >
-              <SelectTrigger id="tone">
-                <SelectValue placeholder="Select a style" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="professional">Professional</SelectItem>
-                <SelectItem value="casual">Casual</SelectItem>
-                <SelectItem value="fun">Fun & Playful</SelectItem>
-                <SelectItem value="bold">Bold & Energetic</SelectItem>
-                <SelectItem value="elegant">Elegant</SelectItem>
-                <SelectItem value="modern">Modern</SelectItem>
-                <SelectItem value="classic">Classic</SelectItem>
-              </SelectContent>
-            </Select>
+              {eventType === 'charity' && <CharityFields />}
+              {eventType === 'sports' && <SportsFields />}
+              {eventType === 'company' && <CompanyFields />}
+              {eventType === 'family' && <FamilyFields />}
+              {eventType === 'school' && <SchoolFields />}
+            </div>
+          )}
+
+          <Separator className="my-6" />
+
+          {/* Optional Fields Section */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+              <Users className="h-4 w-4" />
+              <span>Optional Details</span>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="targetAudience" className="flex items-center gap-1.5">
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                  Who will use/wear these items?
+                </Label>
+                <Input
+                  id="targetAudience"
+                  placeholder="e.g., Adults, kids, all ages"
+                  value={eventDetails.targetAudience || ''}
+                  onChange={(e) => updateEventDetail('targetAudience', e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="tone" className="flex items-center gap-1.5">
+                  <Palette className="h-4 w-4 text-muted-foreground" />
+                  Desired style/tone
+                </Label>
+                <Select
+                  value={eventDetails.tone || ''}
+                  onValueChange={(value) => updateEventDetail('tone', value)}
+                >
+                  <SelectTrigger id="tone">
+                    <SelectValue placeholder="Select a style" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="professional">Professional</SelectItem>
+                    <SelectItem value="casual">Casual</SelectItem>
+                    <SelectItem value="fun">Fun & Playful</SelectItem>
+                    <SelectItem value="bold">Bold & Energetic</SelectItem>
+                    <SelectItem value="elegant">Elegant</SelectItem>
+                    <SelectItem value="modern">Modern</SelectItem>
+                    <SelectItem value="classic">Classic</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
-
-      {/* Navigation Buttons */}
-      <div className="flex justify-between items-center pt-4">
-        <Button variant="outline" onClick={previousStep} type="button">
-          Back
-        </Button>
-
-        <Button
-          onClick={handleContinue}
-          disabled={!isFormValid()}
-          type="button"
-        >
-          Continue to Design
-        </Button>
-      </div>
     </div>
   );
 }
@@ -202,7 +251,7 @@ function CharityFields() {
   const { eventDetails, updateEventDetail } = useDesignWizard();
 
   return (
-    <>
+    <div className="grid md:grid-cols-2 gap-4">
       <div className="space-y-2">
         <Label htmlFor="cause">Charity Cause/Focus</Label>
         <Input
@@ -231,7 +280,7 @@ function CharityFields() {
           </SelectContent>
         </Select>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -240,7 +289,7 @@ function SportsFields() {
   const { eventDetails, updateEventDetail } = useDesignWizard();
 
   return (
-    <>
+    <div className="grid md:grid-cols-3 gap-4">
       <div className="space-y-2">
         <Label htmlFor="sport">Sport/Activity</Label>
         <Input
@@ -285,7 +334,7 @@ function SportsFields() {
           </SelectContent>
         </Select>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -294,7 +343,7 @@ function CompanyFields() {
   const { eventDetails, updateEventDetail } = useDesignWizard();
 
   return (
-    <>
+    <div className="grid md:grid-cols-2 gap-4">
       <div className="space-y-2">
         <Label htmlFor="industry">Industry</Label>
         <Input
@@ -324,7 +373,7 @@ function CompanyFields() {
           </SelectContent>
         </Select>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -384,7 +433,7 @@ function SchoolFields() {
   const { eventDetails, updateEventDetail } = useDesignWizard();
 
   return (
-    <>
+    <div className="grid md:grid-cols-2 gap-4">
       <div className="space-y-2">
         <Label htmlFor="gradeLevel">Grade Level/Department</Label>
         <Input
@@ -414,7 +463,7 @@ function SchoolFields() {
           </SelectContent>
         </Select>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -434,4 +483,30 @@ function getNamePlaceholder(eventType: EventType): string {
   };
 
   return placeholders[eventType];
+}
+
+/** Get icon for event type */
+function getEventTypeIcon(eventType: EventType) {
+  const icons = {
+    charity: <Heart className="h-3.5 w-3.5" />,
+    sports: <Trophy className="h-3.5 w-3.5" />,
+    company: <Building2 className="h-3.5 w-3.5" />,
+    family: <Home className="h-3.5 w-3.5" />,
+    school: <GraduationCap className="h-3.5 w-3.5" />,
+    other: <Sparkles className="h-3.5 w-3.5" />,
+  };
+  return icons[eventType];
+}
+
+/** Get display label for event type */
+function getEventTypeLabel(eventType: EventType): string {
+  const labels = {
+    charity: 'Charity',
+    sports: 'Sports',
+    company: 'Company',
+    family: 'Family',
+    school: 'School',
+    other: 'Other',
+  };
+  return labels[eventType];
 }

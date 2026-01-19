@@ -41,7 +41,7 @@ export function CartItem({ item, onUpdateQuantity, onRemove }: CartItemProps) {
       <CardContent className="p-4">
         <div className="flex gap-4">
           {/* Product Image */}
-          <div className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-md bg-gray-100">
+          <div className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-md bg-muted">
             {item.design?.imageUrl ? (
               <Image
                 src={item.design.thumbnailUrl || item.design.imageUrl}
@@ -57,7 +57,7 @@ export function CartItem({ item, onUpdateQuantity, onRemove }: CartItemProps) {
                 className="object-cover"
               />
             ) : (
-              <div className="flex h-full items-center justify-center text-gray-400">
+              <div className="flex h-full items-center justify-center text-muted-foreground">
                 <span className="text-xs">No image</span>
               </div>
             )}
@@ -77,11 +77,11 @@ export function CartItem({ item, onUpdateQuantity, onRemove }: CartItemProps) {
             <div className="flex-1">
               <div className="flex justify-between">
                 <div>
-                  <h3 className="font-semibold text-gray-900">{item.product.name}</h3>
-                  <p className="mt-1 text-sm text-gray-500">{item.variant.name}</p>
+                  <h3 className="font-semibold text-foreground">{item.product.name}</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">{item.variant.name}</p>
 
                   {/* Variant Details */}
-                  <div className="mt-1 flex flex-wrap gap-2 text-xs text-gray-500">
+                  <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
                     {item.variant.size && <span>Size: {item.variant.size}</span>}
                     {item.variant.color && <span>Color: {item.variant.color}</span>}
                   </div>
@@ -96,10 +96,10 @@ export function CartItem({ item, onUpdateQuantity, onRemove }: CartItemProps) {
 
                 {/* Price (Desktop) */}
                 <div className="hidden text-right sm:block">
-                  <p className="font-semibold text-gray-900">
+                  <p className="font-semibold text-foreground">
                     {formatPrice(totalPrice)}
                   </p>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-muted-foreground">
                     {formatPrice(item.unitPrice)} each
                   </p>
                 </div>
@@ -147,7 +147,7 @@ export function CartItem({ item, onUpdateQuantity, onRemove }: CartItemProps) {
                 variant="ghost"
                 size="sm"
                 onClick={() => onRemove(item.id)}
-                className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
               >
                 <Trash2 className="mr-1 h-4 w-4" />
                 Remove
@@ -156,8 +156,8 @@ export function CartItem({ item, onUpdateQuantity, onRemove }: CartItemProps) {
 
             {/* Price (Mobile) */}
             <div className="mt-2 flex justify-between sm:hidden">
-              <p className="font-semibold text-gray-900">{formatPrice(totalPrice)}</p>
-              <p className="text-sm text-gray-500">{formatPrice(item.unitPrice)} each</p>
+              <p className="font-semibold text-foreground">{formatPrice(totalPrice)}</p>
+              <p className="text-sm text-muted-foreground">{formatPrice(item.unitPrice)} each</p>
             </div>
           </div>
         </div>

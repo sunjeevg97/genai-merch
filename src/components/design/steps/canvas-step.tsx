@@ -122,17 +122,14 @@ export function CanvasStep() {
 
         const canvas = initializeCanvas(canvasRef.current!, 600, 700, {
           backgroundColor: 'transparent', // Transparent so mockup shows through
-          selectionColor: 'rgba(100, 150, 255, 0.3)',
-          selectionBorderColor: '#4a90e2',
+          // Selection colors use theme defaults (cyan from Cyber Blue palette)
         });
 
         canvasInstanceRef.current = canvas;
 
-        // Setup print area bounds
+        // Setup print area bounds (uses theme defaults for cyan accent)
         setupPrintAreaBounds(canvas, mockup.printArea, {
-          stroke: '#4a90e2',
           strokeWidth: 2,
-          fill: 'rgba(74, 144, 226, 0.05)',
           strokeDashArray: [5, 5],
         });
 

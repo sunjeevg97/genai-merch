@@ -43,15 +43,15 @@ export function ValidationPanel({ validation }: ValidationPanelProps) {
       <div className="flex items-center gap-2">
         {isValid ? (
           <>
-            <div className="w-3 h-3 rounded-full bg-green-500" />
-            <span className="text-sm font-medium text-green-700">
+            <div className="w-3 h-3 rounded-full bg-success" />
+            <span className="text-sm font-medium text-success">
               Ready for print
             </span>
           </>
         ) : (
           <>
-            <div className="w-3 h-3 rounded-full bg-red-500" />
-            <span className="text-sm font-medium text-red-700">
+            <div className="w-3 h-3 rounded-full bg-destructive" />
+            <span className="text-sm font-medium text-destructive">
               Print quality issues detected
             </span>
           </>
@@ -61,11 +61,11 @@ export function ValidationPanel({ validation }: ValidationPanelProps) {
       {dpi && (
         <div className="text-sm">
           <span className="font-medium">DPI:</span>{' '}
-          <span className={dpi < 150 ? 'text-red-600' : 'text-green-600'}>
+          <span className={dpi < 150 ? 'text-destructive' : 'text-success'}>
             {dpi}
           </span>
           {dpi < 150 && (
-            <p className="text-xs text-red-600 mt-1">
+            <p className="text-xs text-destructive mt-1">
               Minimum 150 DPI recommended for print
             </p>
           )}
@@ -81,9 +81,9 @@ export function ValidationPanel({ validation }: ValidationPanelProps) {
 
       {warnings.length > 0 && (
         <div className="space-y-1">
-          <p className="text-sm font-medium text-yellow-700">Warnings:</p>
+          <p className="text-sm font-medium text-warning">Warnings:</p>
           {warnings.map((warning, i) => (
-            <p key={i} className="text-xs text-yellow-600">
+            <p key={i} className="text-xs text-warning">
               • {warning}
             </p>
           ))}
@@ -92,9 +92,9 @@ export function ValidationPanel({ validation }: ValidationPanelProps) {
 
       {errors.length > 0 && (
         <div className="space-y-1">
-          <p className="text-sm font-medium text-red-700">Errors:</p>
+          <p className="text-sm font-medium text-destructive">Errors:</p>
           {errors.map((error, i) => (
-            <p key={i} className="text-xs text-red-600">
+            <p key={i} className="text-xs text-destructive">
               • {error}
             </p>
           ))}

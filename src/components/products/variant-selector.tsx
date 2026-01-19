@@ -168,7 +168,7 @@ export function VariantSelector({
         const color = parseColorFromVariant(v.name, v.color);
         return size === selectedSize && color === selectedColor;
       }) && (
-        <p className="text-sm text-red-600">
+        <p className="text-sm text-destructive">
           This combination is not available. Please select a different size or color.
         </p>
       )}

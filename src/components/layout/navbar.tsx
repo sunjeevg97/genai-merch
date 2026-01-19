@@ -42,7 +42,7 @@ export function Navbar() {
                   </Link>
                 </SignedOut>
                 <SignedIn>
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-2" suppressHydrationWarning>
                     <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary">
                       <Sparkles className="h-5 w-5 text-primary-foreground" />
                     </div>
@@ -55,15 +55,17 @@ export function Navbar() {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex md:items-center md:space-x-8">
-            {navLinks.map((link) => (
-              <a
-                key={link.href}
-                href={link.href}
-                className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
-              >
-                {link.label}
-              </a>
-            ))}
+            <SignedOut>
+              {navLinks.map((link) => (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
+                >
+                  {link.label}
+                </a>
+              ))}
+            </SignedOut>
           </div>
 
           {/* Desktop CTA Buttons */}
@@ -77,9 +79,6 @@ export function Navbar() {
               </Button>
             </SignedOut>
             <SignedIn>
-              <Button variant="ghost" asChild>
-                <Link href="/design/create">Create Design</Link>
-              </Button>
               <UserButton
                 appearance={{
                   elements: {
@@ -110,16 +109,18 @@ export function Navbar() {
       {mobileMenuOpen && (
         <div className="border-t md:hidden">
           <div className="space-y-1 px-4 pb-3 pt-2">
-            {navLinks.map((link) => (
-              <a
-                key={link.href}
-                href={link.href}
-                className="block rounded-md px-3 py-2 text-base font-medium text-muted-foreground hover:bg-muted hover:text-primary"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                {link.label}
-              </a>
-            ))}
+            <SignedOut>
+              {navLinks.map((link) => (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  className="block rounded-md px-3 py-2 text-base font-medium text-muted-foreground hover:bg-muted hover:text-primary"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  {link.label}
+                </a>
+              ))}
+            </SignedOut>
             <div className="mt-4 space-y-2" suppressHydrationWarning>
               <SignedOut>
                 <Button variant="outline" className="w-full" asChild>
@@ -130,9 +131,6 @@ export function Navbar() {
                 </Button>
               </SignedOut>
               <SignedIn>
-                <Button variant="outline" className="w-full" asChild>
-                  <Link href="/design/create">Create Design</Link>
-                </Button>
                 <div className="flex items-center justify-center pt-2">
                   <UserButton
                     appearance={{

@@ -94,7 +94,7 @@ export function ColorSelector({
       </div>
 
       {selectedColor && !colors.find((c) => c.value === selectedColor)?.available && (
-        <p className="text-sm text-red-600">This color is currently out of stock</p>
+        <p className="text-sm text-destructive">This color is currently out of stock</p>
       )}
     </div>
   );

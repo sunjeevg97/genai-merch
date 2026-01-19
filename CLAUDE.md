@@ -1601,6 +1601,24 @@ Settings are pre-configured in `.vscode/settings.json`:
 - **shadcn/ui theming** for consistent look and feel
 - **Dark mode support** where applicable
 
+### Typography
+- **Geometric Contrast** - Bold headings with friendly body text
+  - **Display/Headings**: Space Grotesk (600-700 weight)
+  - **Body Text**: DM Sans (400-500 weight)
+  - **Code/Mono**: Geist Mono
+- **Implementation**:
+  - Fonts loaded via `next/font/google` in `src/app/layout.tsx`
+  - Global font hierarchy in `src/app/globals.css` using CSS custom properties
+  - Headings automatically use Space Grotesk with `-0.01em` letter-spacing
+  - Body text uses DM Sans for readability
+- **Typography Scale**: 12-level semantic scale from Display Large (64px) to Overline (12px)
+- **Performance**: Automatic font subsetting and preloading via Next.js optimization
+- **Why this pairing**:
+  - Space Grotesk provides bold, distinctive character for headings
+  - DM Sans offers warm, approachable readability for long-form content
+  - Shared x-heights ensure visual harmony while maintaining contrast
+- **Preview**: View all typography options at `/theme-preview`
+
 ### Database & API
 - **Prisma for all database operations** - no raw SQL unless absolutely necessary
 - **API routes follow REST conventions**
@@ -6759,39 +6777,174 @@ GenAI-Merch features a comprehensive 5-step wizard that guides users from concep
 ### Wizard Steps Overview
 
 **Step 1: Event Type Selection**
-- User selects the purpose of their merchandise (charity, sports, company, etc.)
+- User selects the purpose of their merchandise (charity, sports, company, family, school, other)
 - This context informs AI design generation in later steps
 - Influences design recommendations and starter prompts
+- **Auto-clear feature**: Changing event type clears event details to prevent orphaned data
 
-**Step 2: Product Selection**
-- User selects which products they want to order (t-shirts, hoodies, mugs, etc.)
-- Multiple products can be selected
-- The first selected product determines the default mockup in the canvas editor
+**Step 2: Event Details**
+- Dynamic form based on event type selection
+- Gathers event-specific information (team name, cause, industry, etc.)
+- Required fields vary by event type (validated before progression)
+- All details feed into AI prompt generation for personalized designs
 
-**Step 3: Brand Assets Upload (Optional)**
-- Users can upload logos, brand colors, fonts, and define brand voice
-- All fields are optional - users can skip this step entirely
-- Uploaded assets are used to inform AI design generation
-- Assets are stored in Supabase Storage under `{userId}/logos/`
-
-**Step 4: AI Design Chat**
+**Step 3: AI Design Chat**
 - Split-screen interface: Chat on left, generated designs gallery on right
 - Users chat with GPT-4 to refine their design ideas
-- Users can generate designs with DALL-E 3 based on their description
+- DALL-E 3 generates designs based on user descriptions
+- **Optional brand assets**: Upload logos, define colors, fonts, and brand voice
 - All generated designs are saved to the Zustand store
-- Users select their favorite design to continue to the canvas
+- Users select their favorite design to continue
 
-**Step 5: Canvas Editor**
-- Interactive Fabric.js canvas for final design customization
-- **Auto-loads AI-generated design** from step 4 if available
-- **Auto-selects mockup** based on first product from step 2
-- Falls back to manual logo upload if no AI design was generated
-- Users can drag, scale, rotate, and position designs
-- Export options: Save to database and Download as PNG
+**Step 4: Choose Products**
+- Full product catalog with filtering and search
+- Inline cart sidebar for real-time order building
+- Product detail modal with mockup preview
+- Auto-generates mockups with wizard design
+- Cached mockup loading for instant retrieval
+
+**Step 5: Checkout & Payment**
+- Order review with mockup previews
+- Stripe checkout integration
+- Guest checkout support
+- Order creation with PENDING_PAYMENT status
+- Redirect to Stripe hosted checkout
+- Success page with order confirmation
+
+---
+
+### Wizard Navigation System
+
+The wizard features a sticky header with integrated navigation controls that provides a seamless user experience across all steps.
+
+#### Navigation Components
+
+**Progress Dots** - Visual indicator of current step (1-5)
+- Clickable for completed steps (navigate back)
+- Shows checkmarks for completed steps
+- Current step highlighted with ring
+- Disabled for future steps
+
+**Back Button** - Navigate to previous step
+- Hidden on Step 1
+- Smooth scroll to top on navigation
+- Accessible keyboard navigation
+
+**Restart Button** - Reset wizard with confirmation dialog
+- Hidden on Step 5 (Checkout)
+- Confirmation dialog prevents accidental resets
+- Clears all wizard state including cart
+
+#### Implementation Details
+
+**Location**: `src/components/design/design-wizard.tsx` lines 124-218
+
+**Features**:
+- Sticky positioning with backdrop blur (`sticky top-0 bg-background/95 backdrop-blur`)
+- Responsive layout (mobile-friendly with abbreviated labels)
+- Smooth scroll to top on navigation
+- AnimatePresence for step transitions
+- 32px spacing (`mt-8`) between header and content for better visual hierarchy
+
+**Code Example**:
+```typescript
+<div className="sticky top-0 z-20 bg-background/95 backdrop-blur">
+  <div className="container mx-auto px-4 py-3">
+    <div className="flex items-center justify-between gap-4">
+      {/* Left: Back Button */}
+      {currentStep > 1 && (
+        <Button variant="ghost" size="sm" onClick={() => previousStep()}>
+          <ArrowLeft className="h-4 w-4" />
+          Back
+        </Button>
+      )}
+
+      {/* Center: Progress Dots */}
+      <div className="flex items-center gap-2">
+        {[1, 2, 3, 4, 5].map((step) => (
+          <button
+            onClick={() => step < currentStep && goToStep(step)}
+            disabled={step > currentStep}
+            className={/* dynamic styling */}
+          >
+            {step < currentStep ? <Check /> : <span>{step}</span>}
+          </button>
+        ))}
+      </div>
+
+      {/* Right: Restart Button */}
+      {currentStep < 5 && (
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button variant="ghost" size="sm">
+              <RotateCcw className="h-4 w-4" />
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            {/* Confirmation dialog */}
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
+  </div>
+</div>
+```
+
+**Recent Improvements**:
+- Removed FloatingNextButton component (redundant after unified navigation)
+- Added spacing between header and content for better UX
+- Integrated all navigation into single sticky header
+
+---
+
+### Event Details Auto-Clear Feature
+
+When a user navigates back to Step 1 and selects a different event type, the event details form is automatically cleared to prevent orphaned data from the previous type.
+
+#### Why This Matters
+
+**Problem**: Without auto-clearing, changing from "Charity" to "Sports" would leave charity-specific fields (like `cause`) in the state, creating data inconsistency and confusing AI prompts.
+
+**Solution**: The `setEventType()` function in the Zustand store detects event type changes and conditionally clears the `eventDetails` object.
+
+#### Implementation
+
+**Location**: `src/lib/store/design-wizard.ts` lines 691-704
+
+```typescript
+setEventType: (eventType: EventType) => {
+  const { eventType: currentEventType } = get();
+
+  // Only clear eventDetails if event type actually changed
+  if (currentEventType !== eventType) {
+    set({
+      eventType,
+      eventDetails: {}, // Clear old details for new event type
+    });
+  } else {
+    // Same event type - preserve existing details
+    set({ eventType });
+  }
+},
+```
+
+#### Behavior
+
+- **Type changed** (Charity → Sports): Form cleared, providing a fresh start for the new event type
+- **Same type re-selected** (Sports → Sports): Form preserved, preventing accidental data loss
+
+#### Benefits
+
+1. **Data Consistency**: Prevents orphaned fields from previous event type
+2. **Better UX**: Users expect a clean form when changing event type
+3. **AI Prompt Quality**: Ensures AI prompts only include relevant event details
+4. **Correct Validation**: No ghost validation errors from previous type's fields
 
 ---
 
 ### Canvas Step Integration
+
+> **Note**: The canvas editor is no longer part of the main 5-step wizard flow (which now ends at Checkout). This documentation is preserved for reference as the canvas editor may be used in other parts of the application or future features.
 
 The canvas step (`src/components/design/steps/canvas-step.tsx`) seamlessly integrates AI-generated designs with the interactive canvas editor.
 

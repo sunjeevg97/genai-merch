@@ -8,19 +8,17 @@
 
 import { useState } from 'react';
 import { useCart } from '@/lib/cart/store';
-import { useDesignWizard } from '@/lib/store/design-wizard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { ShoppingCart, CreditCard, Package, Truck, ArrowLeft, Loader2 } from 'lucide-react';
+import { ShoppingCart, CreditCard, Package, Truck, Loader2 } from 'lucide-react';
 import Image from 'next/image';
 import { createCheckoutSession, redirectToCheckout } from '@/lib/stripe/client';
 import { toast } from 'sonner';
 
 export function CheckoutStep() {
   const { items, subtotal, itemCount } = useCart();
-  const { previousStep } = useDesignWizard();
   const [isProcessing, setIsProcessing] = useState(false);
 
   const formatPrice = (cents: number) => `$${(cents / 100).toFixed(2)}`;
@@ -72,12 +70,6 @@ export function CheckoutStep() {
 
   return (
     <div className="space-y-8">
-      {/* Back Button */}
-      <Button variant="ghost" size="sm" className="group" onClick={previousStep}>
-        <ArrowLeft className="mr-2 h-4 w-4 transition-transform group-hover:-translate-x-1" />
-        Back to Product Selection
-      </Button>
-
       {/* Header */}
       <div className="space-y-2">
         <h2 className="text-3xl font-bold">Review & Checkout</h2>
@@ -113,7 +105,7 @@ export function CheckoutStep() {
                   <div key={item.id}>
                     <div className="flex gap-4">
                       {/* Item Image - Use mockup if available */}
-                      <div className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100">
+                      <div className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-lg bg-muted">
                         <Image
                           src={item.mockupConfig?.mockupUrl || item.design?.imageUrl || item.product.imageUrl}
                           alt={item.product.name}
@@ -231,10 +223,10 @@ export function CheckoutStep() {
             </Card>
 
             {/* Info Card */}
-            <Card className="border-blue-200 bg-blue-50">
+            <Card className="border-primary/20 bg-primary/5">
               <CardContent className="pt-6">
-                <h4 className="mb-2 font-semibold text-blue-900">What happens next?</h4>
-                <ul className="space-y-2 text-sm text-blue-700">
+                <h4 className="mb-2 font-semibold text-foreground">What happens next?</h4>
+                <ul className="space-y-2 text-sm text-foreground/80">
                   <li className="flex items-start gap-2">
                     <span className="mt-0.5">•</span>
                     <span>Secure payment processing via Stripe</span>

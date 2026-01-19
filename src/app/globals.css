@@ -6,7 +6,8 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-dm-sans);
+  --font-display: var(--font-space-grotesk);
   --font-mono: var(--font-geist-mono);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -105,61 +106,66 @@
 }
 
 .dark {
-  /* GenAI-Merch Brand Theme - Dark Mode */
-  /* Optimized for reduced eye strain while maintaining brand identity */
+  /* Cyber Blue Theme - Vercel/Cursor-inspired */
+  /* Technical & Precise - True black with cyan accents */
 
-  /* Base colors - dark background with light text */
-  --background: oklch(0.145 0 0); /* Near-black */
-  --foreground: oklch(0.985 0 0); /* Off-white text */
+  /* Backgrounds - True black base */
+  --background: oklch(0 0 0); /* #000000 - True black */
+  --foreground: oklch(0.93 0 0); /* #EDEDED - Cool white */
 
-  /* Card components - elevated surfaces */
-  --card: oklch(0.205 0.01 275); /* Subtle purple tint */
-  --card-foreground: oklch(0.985 0 0);
+  /* Card components - Near black elevated surfaces */
+  --card: oklch(0.04 0 0); /* #0A0A0A - Near black */
+  --card-foreground: oklch(0.93 0 0);
 
   /* Popovers and dropdowns */
-  --popover: oklch(0.205 0.01 275);
-  --popover-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.04 0 0);
+  --popover-foreground: oklch(0.93 0 0);
 
-  /* Primary brand color - lighter purple for dark mode */
-  --primary: oklch(0.7 0.22 275); /* Lighter purple-blue */
-  --primary-foreground: oklch(0.145 0 0); /* Dark text on primary */
+  /* Primary brand color - Bright cyan */
+  --primary: oklch(0.75 0.15 200); /* #06B6D4 - Bright cyan */
+  --primary-foreground: oklch(0 0 0); /* Black text on cyan */
 
   /* Secondary actions */
-  --secondary: oklch(0.269 0.02 275); /* Dark purple tint */
-  --secondary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.08 0 0); /* Similar to muted */
+  --secondary-foreground: oklch(0.93 0 0);
 
-  /* Muted backgrounds */
-  --muted: oklch(0.269 0.02 275);
-  --muted-foreground: oklch(0.708 0 0); /* Light gray */
+  /* Muted backgrounds - Dark panels */
+  --muted: oklch(0.08 0 0); /* #141414 - Dark panels */
+  --muted-foreground: oklch(0.64 0.014 265); /* #A1A1AA - Cool gray */
 
-  /* Accent color - complementary warm tone */
-  --accent: oklch(0.65 0.22 45); /* Warm orange */
-  --accent-foreground: oklch(0.99 0 0);
+  /* Accent color - Light cyan for special elements */
+  --accent: oklch(0.82 0.14 200); /* #22D3EE - Light cyan */
+  --accent-foreground: oklch(0 0 0);
 
-  /* Destructive actions */
-  --destructive: oklch(0.704 0.191 22.216); /* Lighter red for dark mode */
+  /* Destructive actions - Red */
+  --destructive: oklch(0.62 0.25 25); /* #EF4444 - Red */
+  --destructive-foreground: oklch(0.93 0 0);
 
-  /* Borders and inputs - subtle with purple tint */
-  --border: oklch(1 0 0 / 12%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.7 0.22 275); /* Focus ring matches primary */
+  /* Borders and inputs - Zinc with cyan focus */
+  --border: oklch(0.16 0 0); /* #27272A - Zinc borders */
+  --input: oklch(0.16 0 0);
+  --ring: oklch(0.75 0.15 200); /* Cyan focus ring */
 
-  /* Chart colors - vibrant for dark backgrounds */
-  --chart-1: oklch(0.7 0.22 275); /* Purple */
-  --chart-2: oklch(0.7 0.22 45); /* Orange */
-  --chart-3: oklch(0.696 0.18 185); /* Blue */
-  --chart-4: oklch(0.7 0.18 155); /* Teal */
-  --chart-5: oklch(0.7 0.2 310); /* Pink */
+  /* Additional semantic colors for status badges */
+  --success: oklch(0.70 0.14 180); /* #14B8A6 - Teal */
+  --warning: oklch(0.75 0.18 75); /* #F59E0B - Amber */
 
-  /* Sidebar navigation */
-  --sidebar: oklch(0.205 0.01 275);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.7 0.22 275); /* Match primary */
-  --sidebar-primary-foreground: oklch(0.145 0 0);
-  --sidebar-accent: oklch(0.269 0.02 275);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 12%);
-  --sidebar-ring: oklch(0.7 0.22 275);
+  /* Chart colors - Cyan theme */
+  --chart-1: oklch(0.75 0.15 200); /* Cyan */
+  --chart-2: oklch(0.82 0.14 200); /* Light cyan */
+  --chart-3: oklch(0.70 0.14 180); /* Teal */
+  --chart-4: oklch(0.75 0.18 75); /* Amber */
+  --chart-5: oklch(0.62 0.25 25); /* Red */
+
+  /* Sidebar navigation - True black with cyan accents */
+  --sidebar: oklch(0.04 0 0);
+  --sidebar-foreground: oklch(0.93 0 0);
+  --sidebar-primary: oklch(0.75 0.15 200);
+  --sidebar-primary-foreground: oklch(0 0 0);
+  --sidebar-accent: oklch(0.08 0 0);
+  --sidebar-accent-foreground: oklch(0.93 0 0);
+  --sidebar-border: oklch(0.16 0 0);
+  --sidebar-ring: oklch(0.75 0.15 200);
 }
 
 @layer base {
@@ -168,5 +174,10 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-dm-sans), sans-serif;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-space-grotesk), sans-serif;
+    letter-spacing: -0.01em;
   }
 }

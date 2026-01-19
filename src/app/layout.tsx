@@ -1,12 +1,18 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Space_Grotesk, DM_Sans, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Navbar } from "@/components/layout/navbar";
 import { ConditionalFooter } from "@/components/layout/conditional-footer";
 import { ClerkProvider } from "@clerk/nextjs";
+import { ThemeProvider } from "next-themes";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const spaceGrotesk = Space_Grotesk({
+  variable: "--font-space-grotesk",
+  subsets: ["latin"],
+});
+
+const dmSans = DM_Sans({
+  variable: "--font-dm-sans",
   subsets: ["latin"],
 });
 
@@ -78,13 +84,20 @@ export default function RootLayout({
       signInFallbackRedirectUrl="/design/create"
       signUpFallbackRedirectUrl="/design/create"
     >
-      <html lang="en" className="scroll-smooth">
+      <html lang="en" className="scroll-smooth" suppressHydrationWarning>
         <body
-          className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+          className={`${spaceGrotesk.variable} ${dmSans.variable} ${geistMono.variable} antialiased`}
         >
-          <Navbar />
-          <main>{children}</main>
-          <ConditionalFooter />
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="dark"
+            forcedTheme="dark"
+            enableSystem={false}
+          >
+            <Navbar />
+            <main>{children}</main>
+            <ConditionalFooter />
+          </ThemeProvider>
         </body>
       </html>
     </ClerkProvider>

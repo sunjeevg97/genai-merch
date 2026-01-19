@@ -119,9 +119,7 @@ export function DesignCanvas({
       console.log('[DesignCanvas] Initializing canvas');
 
       const canvas = initializeCanvas(canvasRef.current, 800, 1000, {
-        backgroundColor: '#f5f5f5',
-        selectionColor: 'rgba(100, 150, 255, 0.3)',
-        selectionBorderColor: '#4a90e2',
+        // Uses theme defaults (muted background, cyan selection from Cyber Blue palette)
       });
 
       fabricCanvasRef.current = canvas;
@@ -187,11 +185,9 @@ export function DesignCanvas({
         canvas.sendToBack(img);
         mockupBackgroundRef.current = img;
 
-        // Setup print area bounds
+        // Setup print area bounds (uses theme defaults for cyan accent)
         setupPrintAreaBounds(canvas, mockup.printArea, {
-          stroke: '#4a90e2',
           strokeWidth: 2,
-          fill: 'rgba(100, 150, 255, 0.08)',
           strokeDashArray: [8, 4],
         });
 

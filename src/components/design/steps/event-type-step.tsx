@@ -10,8 +10,6 @@
 
 import { useDesignWizard, type EventType, WizardStep } from '@/lib/store/design-wizard';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { useRouter } from 'next/navigation';
 
 /**
  * Event Type Option
@@ -81,8 +79,7 @@ const EVENT_TYPES: EventTypeOption[] = [
  * ```
  */
 export function EventTypeStep() {
-  const { eventType, setEventType, nextStep, currentStep } = useDesignWizard();
-  const router = useRouter();
+  const { eventType, setEventType, nextStep } = useDesignWizard();
 
   /**
    * Handle event type selection
@@ -92,14 +89,6 @@ export function EventTypeStep() {
   const handleSelectEventType = (type: EventType) => {
     setEventType(type);
     nextStep();
-  };
-
-  /**
-   * Handle back navigation
-   * On first step, go back to home page
-   */
-  const handleBack = () => {
-    router.push('/');
   };
 
   return (
@@ -159,21 +148,6 @@ export function EventTypeStep() {
       {/* Helper Text */}
       <div className="text-center text-sm text-muted-foreground">
         <p>Don't worry, you can change this later</p>
-      </div>
-
-      {/* Navigation Buttons */}
-      <div className="flex justify-between items-center pt-4">
-        <Button variant="outline" onClick={handleBack} type="button">
-          Cancel
-        </Button>
-
-        <Button
-          onClick={() => eventType && nextStep()}
-          disabled={!eventType}
-          type="button"
-        >
-          Continue
-        </Button>
       </div>
     </div>
   );

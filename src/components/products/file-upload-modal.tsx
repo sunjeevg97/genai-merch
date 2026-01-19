@@ -198,7 +198,7 @@ export function FileUploadModal({
               className={`
                 cursor-pointer rounded-lg border-2 border-dashed p-8 text-center transition-colors
                 ${isDragActive ? 'border-primary bg-primary/5' : 'border-gray-300'}
-                ${isDragReject ? 'border-red-500 bg-red-50' : ''}
+                ${isDragReject ? 'border-destructive bg-destructive/10' : ''}
                 hover:border-primary hover:bg-primary/5
               `}
             >

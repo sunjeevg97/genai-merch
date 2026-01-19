@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ShoppingCart, Eye, Package, ArrowLeft, ChevronRight } from 'lucide-react';
+import { ShoppingCart, Eye, Package, ChevronRight } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { MockupPreview } from '@/components/products/mockup-preview';
@@ -73,7 +73,7 @@ const SORT_OPTIONS = [
  * Product Showcase Step Component
  */
 export function ProductShowcaseStep() {
-  const { finalDesignUrl, previousStep, nextStep } = useDesignWizard();
+  const { finalDesignUrl, nextStep } = useDesignWizard();
 
   // Cart state
   const { items, subtotal, itemCount, removeItem, updateQuantity } = useCart();
@@ -220,12 +220,6 @@ export function ProductShowcaseStep() {
   // Show product catalog
   return (
     <div className="w-full max-w-7xl mx-auto space-y-8">
-      {/* Back Button */}
-      <Button variant="ghost" size="sm" className="group" onClick={previousStep}>
-        <ArrowLeft className="mr-2 h-4 w-4 transition-transform group-hover:-translate-x-1" />
-        Back to AI Design
-      </Button>
-
       {/* Header */}
       <div className="space-y-4">
         <div className="text-center space-y-2">
@@ -339,7 +333,7 @@ function ProductCardInline({ product, designUrl, onClick }: ProductCardInlinePro
       case 'home-living':
         return 'bg-green-100 text-green-800';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-muted text-foreground';
     }
   };
 
@@ -352,7 +346,7 @@ function ProductCardInline({ product, designUrl, onClick }: ProductCardInlinePro
 
   return (
     <Card className="group cursor-pointer overflow-hidden transition-all hover:shadow-lg" onClick={onClick}>
-      <div className="relative aspect-square bg-gray-100">
+      <div className="relative aspect-square bg-muted">
         <Image
           src={product.imageUrl}
           alt={product.name}
@@ -437,7 +431,7 @@ function CartSidebar({
               {items.map((item) => (
                 <div key={item.id} className="space-y-3">
                   <div className="flex gap-3">
-                    <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-md bg-gray-100">
+                    <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-md bg-muted">
                       <Image
                         src={item.mockupConfig?.mockupUrl || item.design?.imageUrl || item.product.imageUrl}
                         alt={item.product.name}
@@ -644,7 +638,7 @@ function ProductDetailPage({
             {/* Size Selection */}
             {availableSizes.length > 1 && (
               <div className="space-y-3">
-                <p className="text-sm font-semibold uppercase tracking-wide text-gray-700">Size</p>
+                <p className="text-sm font-semibold uppercase tracking-wide text-foreground/80">Size</p>
                 <div className="flex flex-wrap gap-3">
                   {availableSizes.map((size) => {
                     const isSelected = size === selectedSize;
@@ -667,7 +661,7 @@ function ProductDetailPage({
             {/* Color Selection */}
             {availableColors.length > 1 && (
               <div className="space-y-3">
-                <p className="text-sm font-semibold uppercase tracking-wide text-gray-700">Color</p>
+                <p className="text-sm font-semibold uppercase tracking-wide text-foreground/80">Color</p>
                 <div className="flex flex-wrap gap-3">
                   {availableColors.map((color) => {
                     const isSelected = color === selectedColor;
@@ -709,7 +703,7 @@ function ProductDetailPage({
               }}
             />
           ) : (
-            <div className="relative aspect-square bg-gray-100 rounded-lg overflow-hidden">
+            <div className="relative aspect-square bg-muted rounded-lg overflow-hidden">
               <Image
                 src={selectedVariant?.imageUrl || product.imageUrl}
                 alt={product.name}

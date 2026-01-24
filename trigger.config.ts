@@ -20,6 +20,7 @@ export default defineConfig({
   build: {
     extensions: [
       prismaExtension({
+        mode: 'legacy', // Required for Prisma 5.x/6.x with prisma-client-js
         schema: 'prisma/schema.prisma',
         directUrlEnvVarName: 'DIRECT_DATABASE_URL',
       }),

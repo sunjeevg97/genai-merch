@@ -108,7 +108,8 @@ export async function upscaleDesign(designUrl: string): Promise<string> {
     );
 
     // Output is a URL to the upscaled image
-    const upscaledUrl = output as string;
+    // Cast through unknown first - Replicate's run() returns loosely-typed data
+    const upscaledUrl = output as unknown as string;
 
     if (!upscaledUrl) {
       throw new Error('No output from Real-ESRGAN');

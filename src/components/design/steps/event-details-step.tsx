@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Button } from '@/components/ui/button';
 import {
   Heart,
   Trophy,
@@ -32,6 +33,7 @@ import {
   Sparkles,
   Users,
   Palette,
+  ArrowRight,
 } from 'lucide-react';
 
 /**
@@ -235,6 +237,24 @@ export function EventDetailsStep() {
                 </Select>
               </div>
             </div>
+          </div>
+
+          {/* Submit Button */}
+          <div className="pt-4">
+            <Button
+              onClick={handleContinue}
+              disabled={!isFormValid()}
+              className="w-full"
+              size="lg"
+            >
+              Continue to AI Design Chat
+              <ArrowRight className="ml-2 h-5 w-5" />
+            </Button>
+            {!isFormValid() && (
+              <p className="text-sm text-muted-foreground text-center mt-2">
+                Please fill in all required fields (*)
+              </p>
+            )}
           </div>
         </CardContent>
       </Card>

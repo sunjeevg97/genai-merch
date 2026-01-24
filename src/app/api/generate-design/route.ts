@@ -1,16 +1,17 @@
 /**
- * DALL-E 3 Design Generation API Route
+ * Google Gemini Imagen 3 Design Generation API Route
  *
  * POST /api/generate-design
  *
  * Generates custom merchandise designs using a three-step AI process:
- * 1. GPT-4 refines the user's prompt for optimal DALL-E 3 generation
- * 2. DALL-E 3 generates the actual design image
+ * 1. GPT-4 refines the user's prompt for optimal Gemini image generation
+ * 2. Google Gemini Imagen 3 generates the actual design image
  * 3. Image is uploaded to Supabase Storage for permanent persistence
  */
 
 import { NextRequest } from 'next/server';
 import OpenAI from 'openai';
+import { getGoogleAI, DEFAULT_IMAGE_MODEL } from '@/lib/google-ai/client';
 import { z } from 'zod';
 import { buildImageGenerationPrompt, type DesignContext } from '@/lib/ai/prompts';
 import { auth } from '@clerk/nextjs/server';
@@ -19,7 +20,7 @@ import { uploadGeneratedDesign } from '@/lib/supabase/storage-server';
 import type { EventType } from '@/lib/store/design-wizard';
 
 /**
- * Get OpenAI client (lazy initialization to avoid build-time errors)
+ * Get OpenAI client for GPT-4 prompt refinement
  */
 function getOpenAIClient() {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -182,7 +183,7 @@ export async function POST(request: NextRequest) {
       hasBrandAssets: !!brandAssets,
     });
 
-    // STEP 1: Use GPT-4 to refine the prompt for DALL-E 3
+    // STEP 1: Use GPT-4 to refine the prompt for Gemini Imagen 3
     console.log('[Generate Design] Step 1: Refining prompt with GPT-4...');
 
     const optimizedPrompt = buildImageGenerationPrompt(prompt, context);
@@ -196,10 +197,14 @@ export async function POST(request: NextRequest) {
         {
           role: 'system',
           content:
-            'You are an expert at creating prompts for DALL-E 3 to generate merchandise designs. ' +
-            'Take the user\'s design description and context, then create a concise, detailed prompt ' +
-            'that will generate a print-ready merchandise design. Focus on visual elements, style, and composition. ' +
-            'Keep it under 400 characters. Do not include any explanation, only return the optimized prompt.',
+            'You are an expert at creating prompts for Google Gemini Imagen 3 to generate merchandise designs. ' +
+            'Follow these best practices for Gemini prompts:\n' +
+            '1. Be specific and descriptive about visual elements, colors, and style\n' +
+            '2. Include composition details (centered, symmetrical, layout)\n' +
+            '3. Specify mood and artistic style (modern, minimalist, bold, etc.)\n' +
+            '4. Keep prompts focused and clear, avoid contradictory instructions\n' +
+            '5. For merchandise, emphasize clean designs with simple backgrounds\n' +
+            'Create a concise prompt under 400 characters. Only return the optimized prompt, no explanation.',
         },
         {
           role: 'user',
@@ -218,43 +223,58 @@ export async function POST(request: NextRequest) {
 
     console.log('[Generate Design] Refined prompt:', refinedPrompt);
 
-    // STEP 2: Generate image with DALL-E 3
-    console.log('[Generate Design] Step 2: Generating image with DALL-E 3...');
+    // STEP 2: Generate image with Google Gemini (using official SDK)
+    console.log('[Generate Design] Step 2: Generating image with Gemini Pro...');
 
-    const dalleResponse = await openai.images.generate({
-      model: 'dall-e-3',
-      prompt: refinedPrompt,
-      n: 1,
-      size: '1024x1024',
-      quality: 'standard', // Use 'hd' for premium tier
-      response_format: 'url',
+    const googleAI = getGoogleAI();
+
+    const response = await googleAI.models.generateContent({
+      model: DEFAULT_IMAGE_MODEL,
+      contents: refinedPrompt,
+      config: {
+        responseModalities: ['IMAGE'],
+        imageConfig: {
+          aspectRatio: "1:1", // Square for merchandise
+        }
+      }
     });
 
-    const imageData = dalleResponse.data?.[0];
-    const dalleImageUrl = imageData?.url;
-    const revisedPrompt = imageData?.revised_prompt;
-
-    if (!dalleImageUrl) {
-      throw new Error('No image URL returned from DALL-E 3');
+    // Extract image from response
+    if (!response.candidates?.[0]?.content?.parts?.[0]) {
+      throw new Error('No image generated in response');
     }
 
-    console.log('[Generate Design] DALL-E image generated:', dalleImageUrl.substring(0, 100) + '...');
+    const imagePart = response.candidates[0].content.parts[0];
+    if (!imagePart.inlineData || !imagePart.inlineData.data) {
+      throw new Error('No image data in response');
+    }
+
+    const imageBase64 = imagePart.inlineData.data;
+    const mimeType = imagePart.inlineData.mimeType || 'image/png';
+    const imageBuffer = Buffer.from(imageBase64, 'base64');
+
+    console.log('[Generate Design] Image received:', imageBuffer.length, 'bytes');
+
+    const revisedPrompt = refinedPrompt; // Gemini doesn't provide revised prompts like DALL-E
 
     // STEP 3: Upload image to Supabase Storage for permanent persistence
-    // DALL-E URLs expire after a few hours, so we need to save them
     console.log('[Generate Design] Step 3: Uploading to Supabase Storage...');
 
     const designId = Date.now().toString();
-    const uploadResult = await uploadGeneratedDesign(dalleImageUrl, user.id, designId);
+
+    // Upload the image buffer directly to Supabase
+    // Note: We need to modify the upload function to accept buffer instead of URL
+    // For now, convert buffer to data URL for compatibility
+    const dataUrl = `data:${mimeType};base64,${imageBase64}`;
+    const uploadResult = await uploadGeneratedDesign(dataUrl, user.id, designId);
 
     if (!uploadResult.success) {
       console.error('[Generate Design] Failed to upload to Supabase:', uploadResult.error);
-      // Fall back to DALL-E URL if upload fails (non-critical error)
-      console.warn('[Generate Design] Falling back to temporary DALL-E URL');
+      throw new Error('Failed to save generated image: ' + uploadResult.error);
     }
 
-    // Use permanent Supabase URL if available, otherwise fall back to DALL-E URL
-    const finalImageUrl = uploadResult.success ? uploadResult.url! : dalleImageUrl;
+    // Use permanent Supabase URL
+    const finalImageUrl = uploadResult.url!;
 
     // STEP 4: Save design to database
     let savedDesign = null;
@@ -278,6 +298,8 @@ export async function POST(request: NextRequest) {
               eventType: eventType || null,
               products: products || [],
               generatedAt: new Date().toISOString(),
+              model: DEFAULT_IMAGE_MODEL,
+              mimeType: mimeType,
             },
             aiPrompt: prompt,
           },
@@ -327,15 +349,30 @@ export async function POST(request: NextRequest) {
     const duration = Date.now() - startTime;
     console.error('[Generate Design] Error:', error);
 
-    // Handle OpenAI API errors
+    // Handle API errors (OpenAI for GPT-4, Google for Imagen)
     if (error instanceof OpenAI.APIError) {
-      // Content policy violation
-      if (error.status === 400 && error.message.includes('content_policy')) {
+      // OpenAI GPT-4 errors (for prompt refinement)
+      return new Response(
+        JSON.stringify({
+          error: 'Prompt refinement error',
+          message: error.message,
+        }),
+        {
+          status: error.status || 500,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    // Handle Google Imagen API errors
+    if (error instanceof Error && error.message.includes('Imagen API error')) {
+      // Content safety filter
+      if (error.message.includes('safety') || error.message.includes('blocked')) {
         return new Response(
           JSON.stringify({
-            error: 'Content policy violation',
+            error: 'Content safety violation',
             message:
-              'Your prompt was flagged by our content policy. Please try a different description.',
+              'Your prompt was blocked by safety filters. Please try a different description.',
           }),
           {
             status: 400,
@@ -344,12 +381,12 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Rate limit from OpenAI
-      if (error.status === 429) {
+      // Rate limit from Google
+      if (error.message.includes('429') || error.message.includes('quota')) {
         return new Response(
           JSON.stringify({
-            error: 'OpenAI rate limit',
-            message: 'Too many requests to OpenAI. Please try again in a few moments.',
+            error: 'Google API rate limit',
+            message: 'Too many requests to Google AI. Please try again in a few moments.',
           }),
           {
             status: 429,
@@ -358,28 +395,14 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Quota exceeded
-      if (error.message.includes('quota')) {
-        return new Response(
-          JSON.stringify({
-            error: 'Quota exceeded',
-            message: 'OpenAI API quota exceeded. Please contact support.',
-          }),
-          {
-            status: 503,
-            headers: { 'Content-Type': 'application/json' },
-          }
-        );
-      }
-
-      // Generic OpenAI error
+      // Generic Google API error
       return new Response(
         JSON.stringify({
-          error: 'OpenAI API error',
+          error: 'Image generation error',
           message: error.message,
         }),
         {
-          status: error.status || 500,
+          status: 500,
           headers: { 'Content-Type': 'application/json' },
         }
       );

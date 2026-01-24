@@ -27,6 +27,10 @@ import { DesignResults } from '@/components/design/design-results';
 import { DesignFeedbackComponent } from '@/components/design/design-feedback';
 import { GeneratingDesignsLoader } from '@/components/design/loading/generating-designs-loader';
 import { AIFollowupLoader } from '@/components/design/loading/ai-followup-loader';
+import { ErrorAlert } from '@/components/design/error-alert';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Info, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import type { DesignQuestion } from '@/lib/ai/question-templates';
 
@@ -79,6 +83,10 @@ export function ChatStep() {
     addGeneratedDesign,
     selectDesign,
     setFinalDesign,
+    setSavedDesignId,
+    setPrintReadyUrl,
+    setPreparationStatus,
+    setPreparationError,
     nextStep,
   } = useDesignWizard();
 
@@ -88,6 +96,16 @@ export function ChatStep() {
   const [currentAnswer, setCurrentAnswer] = useState<string | string[] | undefined>(undefined);
   const [generatedDesigns, setGeneratedDesigns] = useState<GeneratedDesign[]>([]);
   const [selectedDesignId, setSelectedDesignId] = useState<string | null>(null);
+
+  // Error state management
+  const [generationError, setGenerationError] = useState<{
+    message: string;
+    errorType: string;
+    canRetry: boolean;
+    errors?: Array<{ index: number; errorType: string; message: string }>;
+  } | null>(null);
+  const [partialSuccess, setPartialSuccess] = useState(false);
+  const [retryAttempts, setRetryAttempts] = useState(0);
 
   // Load fixed questions on mount
   useEffect(() => {
@@ -192,6 +210,8 @@ export function ChatStep() {
   const handleVarietySelected = async (level: 'variations' | 'different-concepts') => {
     setDesignVarietyLevel(level);
     setFlowState('generating');
+    setGenerationError(null);
+    setPartialSuccess(false);
 
     try {
       const response = await fetch('/api/generate-designs-batch', {
@@ -207,26 +227,185 @@ export function ChatStep() {
         }),
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to generate designs');
-      }
-
       const data = await response.json();
-      const designs = data.designs || [];
 
-      console.log('[Chat Step] Generated designs:', designs);
-
-      if (designs.length === 0) {
-        throw new Error('No designs generated');
+      // CASE 1: Full success (200)
+      if (response.status === 200 && data.success === true) {
+        setGeneratedDesigns(data.designs);
+        setFlowState('results');
+        setRetryAttempts(0);
+        toast.success(`${data.designs.length} designs generated!`);
+        return;
       }
 
-      setGeneratedDesigns(designs);
-      setFlowState('results');
-      toast.success(`${designs.length} designs generated!`);
+      // CASE 2: Partial success (207)
+      if (response.status === 207 && data.success === 'partial') {
+        setGeneratedDesigns(data.designs);
+        setPartialSuccess(true);
+        setFlowState('results');
+        toast.warning(`Generated ${data.designs.length} of 3 designs`, {
+          description: 'Click "Retry Failed" to generate missing designs',
+        });
+        setGenerationError({
+          message: `Generated ${data.designs.length} of 3. Click retry for remaining.`,
+          errorType: 'PARTIAL_SUCCESS',
+          canRetry: true,
+          errors: data.errors,
+        });
+        return;
+      }
+
+      // CASE 3: Total failure (500)
+      if (response.status === 500) {
+        setGenerationError({
+          message: data.message || 'Failed to generate designs',
+          errorType: data.errorType || 'UNKNOWN_ERROR',
+          canRetry: data.canRetry !== false,
+          errors: data.errors,
+        });
+        setFlowState('variety-selection');
+        toast.error('Design generation failed', {
+          description: data.message,
+          duration: 8000,
+        });
+        return;
+      }
+
+      throw new Error(`Unexpected response: ${response.status}`);
     } catch (error) {
-      console.error('[Chat Step] Error generating designs:', error);
+      setGenerationError({
+        message: error instanceof Error ? error.message : 'Unexpected error',
+        errorType: 'NETWORK_ERROR',
+        canRetry: true,
+      });
+      setFlowState('variety-selection');
       toast.error('Failed to generate designs');
-      setFlowState('variety-selection'); // Go back
+    }
+  };
+
+  /**
+   * Handle retry for failed generations
+   */
+  const handleRetry = async () => {
+    if (retryAttempts >= 3) {
+      toast.error('Maximum retry attempts reached');
+      return;
+    }
+    setRetryAttempts((prev) => prev + 1);
+    if (designVarietyLevel) {
+      await handleVarietySelected(designVarietyLevel);
+    }
+  };
+
+  /**
+   * Save design to database and trigger background preparation
+   */
+  const saveAndPrepareDesign = async (design: GeneratedDesign) => {
+    // Phase 1: Save to database (BLOCKING - critical)
+    setPreparationStatus('saving');
+
+    try {
+      const saveResponse = await fetch('/api/designs/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: `AI Design - ${new Date().toLocaleDateString()}`,
+          imageUrl: design.imageUrl,
+          aiPrompt: design.prompt,
+          metadata: {
+            generatedAt: new Date().toISOString(),
+            eventType,
+            eventDetails,
+            brandAssets,
+            varietyLevel: designVarietyLevel,
+          },
+        }),
+      });
+
+      if (!saveResponse.ok) {
+        throw new Error('Failed to save design');
+      }
+
+      const { data: savedDesign } = await saveResponse.json();
+      setSavedDesignId(savedDesign.id);
+
+      // Update finalDesignUrl with HTTP URL from database
+      // (API converts data URLs to HTTP URLs via Supabase Storage)
+      if (savedDesign.imageUrl && savedDesign.imageUrl.startsWith('http')) {
+        setFinalDesign(savedDesign.imageUrl);
+        console.log('[Chat Step] Updated finalDesignUrl to HTTP URL:', savedDesign.imageUrl.substring(0, 80) + '...');
+      }
+
+      console.log('[Chat Step] Design saved:', savedDesign.id);
+    } catch (error) {
+      console.error('[Chat Step] Save failed:', error);
+      setPreparationStatus('failed');
+      setPreparationError(error instanceof Error ? error.message : 'Save failed');
+      toast.error('Failed to save design. Please try again.');
+      throw error; // Block progression
+    }
+
+    // Phase 2: Prepare for print (NON-BLOCKING - nice-to-have)
+    setPreparationStatus('preparing');
+    toast.info('Preparing design for print...', {
+      duration: 5000,
+      description: 'This may take up to 20 seconds',
+    });
+
+    // Don't await - let it run in background
+    prepareDesignInBackground();
+  };
+
+  /**
+   * Prepare design for print in background (non-blocking)
+   */
+  const prepareDesignInBackground = async () => {
+    // Get the saved design ID from the store
+    const state = useDesignWizard.getState();
+    const { savedDesignId } = state;
+
+    if (!savedDesignId) {
+      console.error('[Chat Step] No saved design ID for preparation');
+      return;
+    }
+
+    try {
+      const prepareResponse = await fetch('/api/design/prepare', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ designId: savedDesignId }),
+      });
+
+      if (!prepareResponse.ok) {
+        const errorData = await prepareResponse.json();
+        throw new Error(errorData.message || 'Preparation failed');
+      }
+
+      const { printReadyUrl, metadata } = await prepareResponse.json();
+
+      setPrintReadyUrl(printReadyUrl);
+      setPreparationStatus('completed');
+
+      console.log('[Chat Step] Design prepared:', {
+        designId: savedDesignId,
+        printReadyUrl,
+        metadata,
+      });
+
+      toast.success('Design ready for print!', {
+        description: 'Optimized for professional printing',
+      });
+    } catch (error) {
+      console.error('[Chat Step] Preparation failed:', error);
+
+      setPreparationStatus('failed');
+      setPreparationError(error instanceof Error ? error.message : 'Preparation failed');
+
+      // Non-critical error - user can still checkout
+      toast.error('Preparation failed', {
+        description: "Don't worry - you can retry before checkout",
+        duration: 8000,
+      });
     }
   };
 
@@ -240,13 +419,19 @@ export function ChatStep() {
   /**
    * Handle "Continue" from results
    */
-  const handleContinueFromResults = () => {
-    if (!selectedDesignId) return;
+  const handleContinueFromResults = async () => {
+    if (!selectedDesignId) {
+      toast.error("Please select a design first");
+      return;
+    }
 
     const selectedDesign = generatedDesigns.find((d) => d.id === selectedDesignId);
-    if (!selectedDesign) return;
+    if (!selectedDesign) {
+      toast.error("Selected design not found");
+      return;
+    }
 
-    // Save to wizard store
+    // Save to wizard store (existing logic)
     addGeneratedDesign({
       id: selectedDesign.id,
       imageUrl: selectedDesign.imageUrl,
@@ -257,6 +442,15 @@ export function ChatStep() {
 
     selectDesign(selectedDesign.id);
     setFinalDesign(selectedDesign.imageUrl);
+
+    // NEW: Save and prepare design
+    try {
+      await saveAndPrepareDesign(selectedDesign);
+    } catch (error) {
+      // Error already handled in saveAndPrepareDesign
+      // Block progression if save failed
+      return;
+    }
 
     // Move to next wizard step (Product Selection)
     nextStep();
@@ -386,24 +580,65 @@ export function ChatStep() {
       {flowState === 'ai-followup' && <AIFollowupLoader />}
 
       {flowState === 'variety-selection' && (
-        <DesignVarietySelector
-          onSelect={handleVarietySelected}
-          onBack={() => setFlowState('questions')}
-          loading={false}
-        />
+        <>
+          {generationError && (
+            <div className="mb-6">
+              <ErrorAlert
+                title={
+                  generationError.errorType === 'CONFIGURATION_ERROR'
+                    ? 'Service Configuration Error'
+                    : generationError.errorType === 'RATE_LIMIT'
+                    ? 'Rate Limit Exceeded'
+                    : generationError.errorType === 'CONTENT_POLICY'
+                    ? 'Content Policy Violation'
+                    : 'Design Generation Failed'
+                }
+                message={generationError.message}
+                errorType={generationError.errorType}
+                canRetry={generationError.canRetry}
+                onRetry={generationError.canRetry ? handleRetry : undefined}
+                technicalDetails={
+                  generationError.errors
+                    ? JSON.stringify(generationError.errors, null, 2)
+                    : undefined
+                }
+              />
+            </div>
+          )}
+          <DesignVarietySelector
+            onSelect={handleVarietySelected}
+            onBack={() => setFlowState('questions')}
+            loading={false}
+          />
+        </>
       )}
 
       {flowState === 'generating' && <GeneratingDesignsLoader count={3} estimatedTime={20} />}
 
       {flowState === 'results' && (
-        <DesignResults
-          designs={generatedDesigns}
-          onSelect={handleDesignSelect}
-          onRegenerateAll={handleRegenerateAll}
-          onContinue={handleContinueFromResults}
-          selectedDesignId={selectedDesignId}
-          loading={false}
-        />
+        <>
+          {partialSuccess && generationError && (
+            <Alert className="mb-4">
+              <Info className="h-4 w-4" />
+              <AlertTitle>Partial Success</AlertTitle>
+              <AlertDescription>
+                <p className="mb-2">Generated {generatedDesigns.length} of 3 designs.</p>
+                <Button variant="outline" size="sm" onClick={handleRetry}>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Retry Failed
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
+          <DesignResults
+            designs={generatedDesigns}
+            onSelect={handleDesignSelect}
+            onRegenerateAll={handleRegenerateAll}
+            onContinue={handleContinueFromResults}
+            selectedDesignId={selectedDesignId}
+            loading={false}
+          />
+        </>
       )}
 
       {flowState === 'feedback' && (

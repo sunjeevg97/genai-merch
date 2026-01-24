@@ -162,3 +162,120 @@ export async function deleteGeneratedDesign(filePath: string): Promise<UploadRes
     };
   }
 }
+
+/**
+ * Extended upload result with thumbnail URL
+ */
+export interface PrintReadyUploadResult extends UploadResult {
+  printReadyUrl?: string;
+  thumbnailUrl?: string;
+}
+
+/**
+ * Upload print-ready design with thumbnail to Supabase Storage (Server-Side)
+ *
+ * Uploads both the optimized print-ready file and a thumbnail version.
+ * Used by the print preparation pipeline.
+ *
+ * @param printReadyBuffer - Optimized image buffer (high-res, print-ready)
+ * @param thumbnailBuffer - Thumbnail image buffer (400x400)
+ * @param userId - User ID for folder organization
+ * @param designId - Design ID for naming
+ * @returns Upload result with permanent URLs for both files
+ *
+ * @example
+ * ```typescript
+ * const result = await uploadPrintReadyDesign(
+ *   printReadyBuffer,
+ *   thumbnailBuffer,
+ *   'user-123',
+ *   'design-456'
+ * );
+ *
+ * if (result.success) {
+ *   console.log('Print-ready URL:', result.printReadyUrl);
+ *   console.log('Thumbnail URL:', result.thumbnailUrl);
+ * }
+ * ```
+ */
+export async function uploadPrintReadyDesign(
+  printReadyBuffer: Buffer,
+  thumbnailBuffer: Buffer,
+  userId: string,
+  designId: string
+): Promise<PrintReadyUploadResult> {
+  try {
+    const supabase = createServiceClient();
+
+    console.log('[Storage Server] Uploading print-ready design:', {
+      printReadySize: `${(printReadyBuffer.length / 1024 / 1024).toFixed(2)} MB`,
+      thumbnailSize: `${(thumbnailBuffer.length / 1024).toFixed(2)} KB`,
+    });
+
+    // Step 1: Upload print-ready file
+    const printReadyPath = `${userId}/print-ready/${designId}.png`;
+
+    const { data: printReadyData, error: printReadyError } = await supabase.storage
+      .from(DESIGNS_BUCKET)
+      .upload(printReadyPath, printReadyBuffer, {
+        contentType: 'image/png',
+        cacheControl: '31536000', // 1 year
+        upsert: true, // Allow re-processing
+      });
+
+    if (printReadyError) {
+      console.error('[Storage Server] Print-ready upload error:', printReadyError);
+      return {
+        success: false,
+        error: `Print-ready upload failed: ${printReadyError.message}`,
+      };
+    }
+
+    // Step 2: Upload thumbnail
+    const thumbnailPath = `${userId}/print-ready/${designId}_thumb.png`;
+
+    const { data: thumbnailData, error: thumbnailError } = await supabase.storage
+      .from(DESIGNS_BUCKET)
+      .upload(thumbnailPath, thumbnailBuffer, {
+        contentType: 'image/png',
+        cacheControl: '31536000',
+        upsert: true,
+      });
+
+    if (thumbnailError) {
+      console.error('[Storage Server] Thumbnail upload error:', thumbnailError);
+      return {
+        success: false,
+        error: `Thumbnail upload failed: ${thumbnailError.message}`,
+      };
+    }
+
+    // Step 3: Get public URLs
+    const { data: printReadyUrlData } = supabase.storage
+      .from(DESIGNS_BUCKET)
+      .getPublicUrl(printReadyPath);
+
+    const { data: thumbnailUrlData } = supabase.storage
+      .from(DESIGNS_BUCKET)
+      .getPublicUrl(thumbnailPath);
+
+    console.log('[Storage Server] Print-ready upload successful:', {
+      printReadyPath,
+      thumbnailPath,
+    });
+
+    return {
+      success: true,
+      printReadyUrl: printReadyUrlData.publicUrl,
+      thumbnailUrl: thumbnailUrlData.publicUrl,
+      url: printReadyUrlData.publicUrl, // For compatibility
+      path: printReadyPath,
+    };
+  } catch (error) {
+    console.error('[Storage Server] Print-ready upload error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'An unexpected error occurred',
+    };
+  }
+}

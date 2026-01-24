@@ -200,7 +200,12 @@ export async function POST(request: NextRequest) {
                   styleId: item.mockupConfig.styleId,
                   styleName: item.mockupConfig.styleName,
                   mockupUrl: item.mockupConfig.mockupUrl,
-                  designUrl: item.design?.imageUrl,
+                  // Prefer print-ready URL over original
+                  designUrl: item.design?.printReadyUrl || item.design?.imageUrl,
+                  // Keep original for reference
+                  originalDesignUrl: item.design?.imageUrl,
+                  // Track preparation status
+                  isPrintReady: !!item.design?.printReadyUrl,
                 }
               : Prisma.JsonNull,
           };

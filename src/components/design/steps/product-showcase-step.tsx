@@ -8,7 +8,7 @@
 
 'use client';
 
-import { useDesignWizard } from '@/lib/store/design-wizard';
+import { useDesignWizard, getWizardDesignData } from '@/lib/store/design-wizard';
 import { useCart } from '@/lib/cart/store';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -22,11 +22,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ShoppingCart, Eye, Package, ChevronRight } from 'lucide-react';
+import { ShoppingCart, Eye, Package, ChevronRight, Loader2, CheckCircle2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { MockupPreview } from '@/components/products/mockup-preview';
 import type { ProductVariant } from '@prisma/client';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 
 /**
  * Product with Variants
@@ -73,7 +74,7 @@ const SORT_OPTIONS = [
  * Product Showcase Step Component
  */
 export function ProductShowcaseStep() {
-  const { finalDesignUrl, nextStep } = useDesignWizard();
+  const { finalDesignUrl, preparationStatus, nextStep } = useDesignWizard();
 
   // Cart state
   const { items, subtotal, itemCount, removeItem, updateQuantity } = useCart();
@@ -234,6 +235,27 @@ export function ProductShowcaseStep() {
             </Badge>
           )}
         </div>
+
+        {/* Design Preparation Status Indicators */}
+        {preparationStatus === 'preparing' && (
+          <Alert className="mb-4">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <AlertTitle>Preparing Design for Print</AlertTitle>
+            <AlertDescription>
+              Your design is being optimized for professional printing. This won't affect adding to cart.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {preparationStatus === 'completed' && (
+          <Alert className="mb-4 bg-green-50 border-green-200">
+            <CheckCircle2 className="h-4 w-4 text-green-600" />
+            <AlertTitle className="text-green-900">Design Ready for Print</AlertTitle>
+            <AlertDescription className="text-green-700">
+              Your design has been optimized for professional printing.
+            </AlertDescription>
+          </Alert>
+        )}
 
         {/* Filters */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -696,7 +718,7 @@ function ProductDetailPage({
                 productType: product.productType,
               }}
               selectedVariant={selectedVariant as ProductVariant}
-              design={{
+              design={getWizardDesignData(useDesignWizard.getState()) || {
                 id: 'wizard-design',
                 imageUrl: designUrl,
                 thumbnailUrl: designUrl,

@@ -318,6 +318,30 @@ export interface DesignWizardState {
    */
   finalDesignUrl: string | null;
 
+  /**
+   * Database Design record ID (real UUID)
+   * Set after design is saved to database
+   */
+  savedDesignId: string | null;
+
+  /**
+   * Print-ready design URL (optimized, upscaled, 300 DPI)
+   * Set after design preparation completes
+   */
+  printReadyUrl: string | null;
+
+  /**
+   * Design preparation status
+   * Tracks the progress of saving and preparing the design
+   */
+  preparationStatus: 'idle' | 'saving' | 'preparing' | 'completed' | 'failed';
+
+  /**
+   * Preparation error message (if failed)
+   * Stores error details when preparation fails
+   */
+  preparationError: string | null;
+
   // ============================================================================
   // Step 4: Product Selection
   // ============================================================================
@@ -517,6 +541,30 @@ export interface DesignWizardState {
    */
   setFinalDesign: (imageUrl: string) => void;
 
+  /**
+   * Set the saved design database ID
+   * @param id - UUID of the saved Design record
+   */
+  setSavedDesignId: (id: string | null) => void;
+
+  /**
+   * Set the print-ready design URL
+   * @param url - Public URL of the print-ready design
+   */
+  setPrintReadyUrl: (url: string | null) => void;
+
+  /**
+   * Set the preparation status
+   * @param status - Current preparation status
+   */
+  setPreparationStatus: (status: DesignWizardState['preparationStatus']) => void;
+
+  /**
+   * Set the preparation error message
+   * @param error - Error message or null to clear
+   */
+  setPreparationError: (error: string | null) => void;
+
   // ============================================================================
   // Step 4 Actions: Product Recommendations
   // ============================================================================
@@ -575,6 +623,10 @@ const initialState = {
   generatedDesigns: [],
   selectedDesignId: null,
   finalDesignUrl: null,
+  savedDesignId: null,
+  printReadyUrl: null,
+  preparationStatus: 'idle' as const,
+  preparationError: null,
   recommendedProducts: [],
   selectedProducts: [],
 };
@@ -677,6 +729,12 @@ export const useDesignWizard = create<DesignWizardState>()(
             generatedDesigns: [],
             selectedDesignId: null,
             finalDesignUrl: null,
+
+            // Clear design preparation
+            savedDesignId: null,
+            printReadyUrl: null,
+            preparationStatus: 'idle' as const,
+            preparationError: null,
 
             // Clear product selection
             recommendedProducts: [],
@@ -880,6 +938,22 @@ export const useDesignWizard = create<DesignWizardState>()(
           set({ finalDesignUrl: imageUrl });
         },
 
+        setSavedDesignId: (id: string | null) => {
+          set({ savedDesignId: id });
+        },
+
+        setPrintReadyUrl: (url: string | null) => {
+          set({ printReadyUrl: url });
+        },
+
+        setPreparationStatus: (status: DesignWizardState['preparationStatus']) => {
+          set({ preparationStatus: status });
+        },
+
+        setPreparationError: (error: string | null) => {
+          set({ preparationError: error });
+        },
+
         // ========================================================================
         // Step 4 Actions: Product Recommendations
         // ========================================================================
@@ -927,6 +1001,10 @@ export const useDesignWizard = create<DesignWizardState>()(
           generatedDesigns: state.generatedDesigns,
           selectedDesignId: state.selectedDesignId,
           finalDesignUrl: state.finalDesignUrl,
+          savedDesignId: state.savedDesignId,
+          printReadyUrl: state.printReadyUrl,
+          preparationStatus: state.preparationStatus,
+          preparationError: state.preparationError,
           recommendedProducts: state.recommendedProducts,
           selectedProducts: state.selectedProducts,
         }),
@@ -937,3 +1015,38 @@ export const useDesignWizard = create<DesignWizardState>()(
     }
   )
 );
+
+/**
+ * Get wizard design data for cart items
+ *
+ * Retrieves the design information from wizard state for use in cart items.
+ * Returns real Design ID + print-ready URL (or fallback to original).
+ *
+ * @param state - Current wizard state
+ * @returns Design data object or null if no design is saved
+ *
+ * @example
+ * ```tsx
+ * const designData = getWizardDesignData(useDesignWizard.getState());
+ * if (designData) {
+ *   addItem({ ...item, design: designData });
+ * }
+ * ```
+ */
+export function getWizardDesignData(state: DesignWizardState): {
+  id: string;
+  imageUrl: string;
+  thumbnailUrl: string;
+  printReadyUrl: string;
+} | null {
+  const { savedDesignId, finalDesignUrl, printReadyUrl } = state;
+
+  if (!savedDesignId || !finalDesignUrl) return null;
+
+  return {
+    id: savedDesignId,
+    imageUrl: finalDesignUrl,
+    thumbnailUrl: finalDesignUrl,
+    printReadyUrl: printReadyUrl || finalDesignUrl, // Fallback to original if not prepared
+  };
+}

@@ -1,7 +1,7 @@
 /**
  * Batch Design Generation API
  *
- * Generates 3 designs simultaneously using DALL-E 3.
+ * Generates 3 designs simultaneously using Google Gemini Pro Image.
  * Supports two variety modes:
  * - 'variations': Same concept with different emphasis
  * - 'different-concepts': Distinct visual approaches
@@ -28,19 +28,14 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import OpenAI from 'openai';
 import { buildImageGenerationPromptFromAnswers } from '@/lib/ai/prompts';
+import { getGoogleAI, DEFAULT_IMAGE_MODEL } from '@/lib/google-ai/client';
 import type {
   EventType,
   EventDetails,
   BrandAssets,
   QuestionAnswer,
 } from '@/lib/store/design-wizard';
-
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
-});
 
 // Validation schema
 const requestSchema = z.object({
@@ -123,6 +118,33 @@ function buildVarietyPrompts(
   }
 }
 
+/**
+ * Get most common error type from failed designs
+ */
+function getMostCommonErrorType(failedDesigns: any[]): string {
+  const errorTypes = failedDesigns.map(d => d.errorType);
+  const typeCounts = errorTypes.reduce((acc: any, type: string) => {
+    const count = errorTypes.filter(t => t === type).length;
+    return count > (acc.count || 0) ? { type, count } : acc;
+  }, { type: 'UNKNOWN_ERROR', count: 0 });
+  return typeCounts.type;
+}
+
+/**
+ * Get user-friendly error message based on error type
+ */
+function getUserMessage(errorType: string): string {
+  const messages: Record<string, string> = {
+    RATE_LIMIT: 'Too many requests. Please wait a moment and try again.',
+    AUTH_ERROR: 'Authentication error. Please contact support.',
+    CONTENT_POLICY: 'Your design request may violate content guidelines. Please try a different description.',
+    TIMEOUT: 'Request timed out. Please try again.',
+    NETWORK_ERROR: 'Network error. Please check your connection.',
+    CONFIGURATION_ERROR: 'Service not configured. Please contact support.',
+  };
+  return messages[errorType] || 'Failed to generate designs. Please try again.';
+}
+
 export async function POST(request: NextRequest) {
   try {
     // Parse request body
@@ -142,6 +164,24 @@ export async function POST(request: NextRequest) {
 
     const { answers, eventType, eventDetails, brandAssets, varietyLevel, count } =
       validation.data;
+
+    // Environment validation - check API key before attempting generation
+    const googleApiKey = process.env.GOOGLE_AI_API_KEY;
+    if (!googleApiKey) {
+      console.error('[Batch Generation] GOOGLE_AI_API_KEY not configured');
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Service not configured',
+          message: 'AI design generation is not available. Please contact support.',
+          errorType: 'CONFIGURATION_ERROR',
+          canRetry: false,
+        },
+        { status: 500 }
+      );
+    }
+
+    console.log('[Batch Generation] Environment validated');
 
     // TODO: Get authenticated user ID (placeholder for now)
     const userId = 'anonymous';
@@ -190,27 +230,41 @@ export async function POST(request: NextRequest) {
     const startTime = Date.now();
     const generationPromises = prompts.slice(0, count).map(async (prompt, index) => {
       try {
-        console.log(`[Batch Generation] Generating design ${index + 1}...`);
+        console.log(`[Batch Generation] Design ${index + 1}/${count}...`);
 
-        const response = await openai.images.generate({
-          model: 'dall-e-3',
-          prompt: prompt,
-          n: 1,
-          size: '1024x1024',
-          quality: 'standard',
-          response_format: 'url',
+        // Get Google AI client
+        const googleAI = getGoogleAI();
+
+        // Generate with SDK (with timeout handling)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+        const response = await googleAI.models.generateContent({
+          model: DEFAULT_IMAGE_MODEL,
+          contents: prompt,
+          config: {
+            responseModalities: ['IMAGE'],
+            imageConfig: {
+              aspectRatio: "1:1",
+            }
+          }
         });
 
-        if (!response.data || response.data.length === 0) {
+        clearTimeout(timeoutId);
+
+        // Extract image from response
+        if (!response.candidates?.[0]?.content?.parts?.[0]) {
+          throw new Error('No image generated in response');
+        }
+
+        const imagePart = response.candidates[0].content.parts[0];
+        if (!imagePart.inlineData || !imagePart.inlineData.data) {
           throw new Error('No image data in response');
         }
 
-        const imageUrl = response.data[0]?.url;
-        const revisedPrompt = response.data[0]?.revised_prompt;
-
-        if (!imageUrl) {
-          throw new Error('No image URL in response');
-        }
+        const imageBase64 = imagePart.inlineData.data;
+        const mimeType = imagePart.inlineData.mimeType || 'image/png';
+        const imageUrl = `data:${mimeType};base64,${imageBase64}`;
 
         console.log(`[Batch Generation] Design ${index + 1} complete`);
 
@@ -218,23 +272,38 @@ export async function POST(request: NextRequest) {
           id: `design-${Date.now()}-${index}`,
           imageUrl,
           prompt,
-          revisedPrompt,
+          mimeType,
+          success: true,
           metadata: {
             index: index + 1,
             varietyLevel,
             eventType,
             generatedAt: new Date().toISOString(),
+            model: DEFAULT_IMAGE_MODEL,
           },
         };
       } catch (error) {
-        console.error(`[Batch Generation] Error generating design ${index + 1}:`, error);
+        // Extract error type from message
+        const errorMessage = error instanceof Error ? error.message : 'Unknown';
+        let errorType = 'UNKNOWN_ERROR';
+        if (errorMessage.includes('RATE_LIMIT')) errorType = 'RATE_LIMIT';
+        else if (errorMessage.includes('AUTH_ERROR')) errorType = 'AUTH_ERROR';
+        else if (errorMessage.includes('CONTENT_POLICY')) errorType = 'CONTENT_POLICY';
+        else if (errorMessage.includes('timeout')) errorType = 'TIMEOUT';
+
+        console.error(`[Batch Generation] Design ${index + 1} error:`, {
+          errorType,
+          message: errorMessage,
+        });
 
         // Return error design
         return {
           id: `design-error-${index}`,
           imageUrl: '',
           prompt,
-          error: error instanceof Error ? error.message : 'Unknown error',
+          success: false,
+          error: errorMessage,
+          errorType,
           metadata: {
             index: index + 1,
             varietyLevel,
@@ -250,32 +319,98 @@ export async function POST(request: NextRequest) {
     const designs = await Promise.all(generationPromises);
     const duration = Date.now() - startTime;
 
-    // Filter out failed designs
-    const successfulDesigns = designs.filter((d) => d.imageUrl && !d.error);
-    const failedCount = designs.length - successfulDesigns.length;
+    // Separate successful and failed designs
+    const successfulDesigns = designs.filter((d) => d.success && d.imageUrl);
+    const failedDesigns = designs.filter((d) => !d.success);
 
-    console.log('[Batch Generation] Batch complete:', {
+    console.log('[Batch Generation] Complete:', {
       total: designs.length,
       successful: successfulDesigns.length,
-      failed: failedCount,
+      failed: failedDesigns.length,
       duration: `${duration}ms`,
+      errors: failedDesigns.map(d => ({ index: d.metadata.index, type: d.errorType })),
     });
 
-    // Return results
+    // CASE 1: All succeeded (200 OK)
+    if (failedDesigns.length === 0) {
+      return NextResponse.json(
+        {
+          success: true,
+          designs: successfulDesigns,
+          metadata: {
+            total: designs.length,
+            successful: successfulDesigns.length,
+            failed: 0,
+            duration,
+            varietyLevel,
+            remaining: rateLimit.remaining,
+          },
+        },
+        {
+          headers: {
+            'X-RateLimit-Remaining': String(rateLimit.remaining),
+          },
+        }
+      );
+    }
+
+    // CASE 2: Partial success (207 Multi-Status)
+    if (successfulDesigns.length > 0) {
+      return NextResponse.json(
+        {
+          success: 'partial',
+          designs: successfulDesigns,
+          errors: failedDesigns.map(d => ({
+            index: d.metadata.index,
+            errorType: d.errorType,
+            message: d.error,
+          })),
+          metadata: {
+            total: designs.length,
+            successful: successfulDesigns.length,
+            failed: failedDesigns.length,
+            duration,
+            varietyLevel,
+            remaining: rateLimit.remaining,
+          },
+        },
+        {
+          status: 207,
+          headers: {
+            'X-RateLimit-Remaining': String(rateLimit.remaining),
+          },
+        }
+      );
+    }
+
+    // CASE 3: Total failure (500)
+    const primaryErrorType = getMostCommonErrorType(failedDesigns);
+    const userMessage = getUserMessage(primaryErrorType);
+    const canRetry = primaryErrorType !== 'AUTH_ERROR' && primaryErrorType !== 'CONFIGURATION_ERROR';
+
     return NextResponse.json(
       {
-        success: true,
-        designs: successfulDesigns,
+        success: false,
+        error: 'All design generations failed',
+        message: userMessage,
+        errorType: primaryErrorType,
+        canRetry,
+        errors: failedDesigns.map(d => ({
+          index: d.metadata.index,
+          errorType: d.errorType,
+          message: d.error,
+        })),
         metadata: {
           total: designs.length,
-          successful: successfulDesigns.length,
-          failed: failedCount,
+          successful: 0,
+          failed: failedDesigns.length,
           duration,
           varietyLevel,
           remaining: rateLimit.remaining,
         },
       },
       {
+        status: 500,
         headers: {
           'X-RateLimit-Remaining': String(rateLimit.remaining),
         },

@@ -1,25 +1,14 @@
 /**
- * DALL-E 3 Design Generation API Route
+ * Google Gemini Design Generation API Route (Simplified)
  *
  * POST /api/design/generate
  *
- * Generates custom designs using OpenAI's DALL-E 3 model.
+ * Generates custom designs using Google's Gemini Pro Image model.
  * Takes a user prompt and context (event type, brand assets) to create on-brand designs.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import OpenAI from 'openai';
-
-/**
- * Get OpenAI client (lazy initialization to avoid build-time errors)
- */
-function getOpenAIClient() {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error('OPENAI_API_KEY is not configured');
-  }
-  return new OpenAI({ apiKey });
-}
+import { getGoogleAI, DEFAULT_IMAGE_MODEL } from '@/lib/google-ai/client';
 
 /**
  * Request body interface
@@ -37,7 +26,7 @@ interface GenerateDesignRequest {
 /**
  * POST /api/design/generate
  *
- * Generate a design using DALL-E 3
+ * Generate a design using Google Gemini Imagen 3
  */
 export async function POST(request: NextRequest) {
   try {
@@ -53,71 +42,103 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate API key
+    const googleApiKey = process.env.GOOGLE_AI_API_KEY;
+    if (!googleApiKey) {
+      throw new Error('GOOGLE_AI_API_KEY is not configured');
+    }
+
     // Enhance prompt with brand context
     let enhancedPrompt = prompt;
-
-    // Add brand colors if provided
     if (brandAssets?.colors && brandAssets.colors.length > 0) {
-      enhancedPrompt += `\nUse these brand colors: ${brandAssets.colors.join(', ')}`;
+      enhancedPrompt += `. Color palette: ${brandAssets.colors.join(', ')}`;
     }
-
-    // Add brand voice if provided
     if (brandAssets?.voice) {
-      enhancedPrompt += `\nBrand style: ${brandAssets.voice}`;
+      enhancedPrompt += `. Style: ${brandAssets.voice}`;
     }
+    enhancedPrompt += `. Create a clear, bold design suitable for custom apparel and merchandise. Use clean composition with simple background. Centered layout, high contrast, professional quality.`;
 
-    // Add design constraints for merchandise
-    enhancedPrompt += `\nCreate a design suitable for custom apparel/merchandise. The design should be clear, bold, and work well on clothing. Use a transparent or simple background.`;
+    console.log('[Design Generate] Generating with prompt:', enhancedPrompt.substring(0, 200) + '...');
 
-    console.log('Generating design with prompt:', enhancedPrompt);
+    // Generate with Google AI SDK
+    const googleAI = getGoogleAI();
 
-    // Get OpenAI client
-    const openai = getOpenAIClient();
-
-    // Generate image with DALL-E 3
-    const response = await openai.images.generate({
-      model: 'dall-e-3',
-      prompt: enhancedPrompt,
-      n: 1,
-      size: '1024x1024',
-      quality: 'standard',
-      response_format: 'url',
+    const response = await googleAI.models.generateContent({
+      model: DEFAULT_IMAGE_MODEL,
+      contents: enhancedPrompt,
+      config: {
+        responseModalities: ['IMAGE'],
+        imageConfig: {
+          aspectRatio: "1:1",
+        }
+      }
     });
 
-    const imageData = response.data?.[0];
-    const imageUrl = imageData?.url;
-
-    if (!imageUrl) {
-      throw new Error('No image URL returned from DALL-E 3');
+    // Extract image from response
+    if (!response.candidates?.[0]?.content?.parts?.[0]) {
+      throw new Error('No image generated in response');
     }
 
+    const imagePart = response.candidates[0].content.parts[0];
+    if (!imagePart.inlineData || !imagePart.inlineData.data) {
+      throw new Error('No image data in response');
+    }
+
+    const imageBase64 = imagePart.inlineData.data;
+    const mimeType = imagePart.inlineData.mimeType || 'image/png';
+    const imageUrl = `data:${mimeType};base64,${imageBase64}`;
+
+    console.log('[Design Generate] Image generated successfully');
+
     // TODO: Upload image to Supabase Storage for persistence
-    // DALL-E URLs expire after a few hours, so we should store them
-    // const { data, error } = await supabase.storage
-    //   .from('generated-designs')
-    //   .upload(`designs/${userId}/${Date.now()}.png`, imageBuffer);
+    // Currently returning data URL which will expire when the session ends
+    // For production, implement upload to Supabase Storage similar to /api/generate-design route
 
     return NextResponse.json({
       imageUrl,
       prompt,
-      revisedPrompt: imageData?.revised_prompt,
+      model: DEFAULT_IMAGE_MODEL,
+      mimeType,
     });
   } catch (error) {
-    console.error('Error generating design:', error);
+    console.error('[Design Generate] Error:', error);
 
-    // Handle specific OpenAI errors
-    if (error instanceof OpenAI.APIError) {
+    // Handle Google Gemini API errors
+    if (error instanceof Error && error.message.includes('Gemini API error')) {
+      // Content safety filter
+      if (error.message.includes('safety') || error.message.includes('blocked')) {
+        return NextResponse.json(
+          {
+            error: 'Content safety violation',
+            message:
+              'Your prompt was blocked by safety filters. Please try a different description.',
+          },
+          { status: 400 }
+        );
+      }
+
+      // Rate limit
+      if (error.message.includes('429') || error.message.includes('quota')) {
+        return NextResponse.json(
+          {
+            error: 'Rate limit exceeded',
+            message: 'Too many requests. Please try again in a few moments.',
+          },
+          { status: 429 }
+        );
+      }
+
       return NextResponse.json(
         {
-          error: 'Failed to generate design',
+          error: 'Image generation failed',
           message: error.message,
         },
-        { status: error.status || 500 }
+        { status: 500 }
       );
     }
 
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error', message: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

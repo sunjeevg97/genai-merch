@@ -48,6 +48,7 @@ const checkoutRequestSchema = z.object({
           id: z.string(),
           imageUrl: z.string(),
           thumbnailUrl: z.string().optional(),
+          printReadyUrl: z.string().optional(), // Print-prepared design URL (300 DPI, upscaled)
         })
         .nullable(),
       mockupConfig: z

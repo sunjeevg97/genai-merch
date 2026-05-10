@@ -322,5 +322,5 @@ model MockupCache {
 
   @@index([productId])
   @@index([expiresAt])
-  @@index([designUrl(length: 255)])
+  @@index([designUrl])
 }

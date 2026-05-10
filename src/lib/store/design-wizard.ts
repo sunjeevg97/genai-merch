@@ -1088,6 +1088,8 @@ export const useDesignWizard = create<DesignWizardState>()(
             }
           }
         },
+        // Type assertion needed because Zustand v5 typing expects full state
+        // but partialize intentionally returns only the fields we want to persist
         partialize: (state) => {
           // Filter out base64 data URLs from generatedDesigns to prevent localStorage quota errors
           // Base64 images from AI generation can be 1-5MB each, exceeding localStorage limits
@@ -1125,7 +1127,7 @@ export const useDesignWizard = create<DesignWizardState>()(
             preparationError: state.preparationError,
             recommendedProducts: state.recommendedProducts,
             selectedProducts: state.selectedProducts,
-          };
+          } as DesignWizardState;
         },
       }
     ),

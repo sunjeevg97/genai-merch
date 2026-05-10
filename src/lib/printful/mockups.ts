@@ -46,6 +46,16 @@
  */
 
 import crypto from 'crypto';
+import {
+  autoCorrectTechnique,
+  validateTechniqueForProduct,
+} from './technique-validator';
+import {
+  inferTechniqueFromProductAndPlacement,
+  getDefaultTechniqueForProduct,
+  getValidTechniquesForProduct,
+  type PrintTechnique,
+} from './technique-mapping';
 
 /**
  * Mockup placement options
@@ -100,7 +110,7 @@ export interface MockupRequest {
     style_id?: number; // Optional mockup style (flat lay, model, hanger, etc.)
     placements: Array<{
       placement: string;
-      technique: 'dtg' | 'dtfilm' | 'embroidery' | 'digital';
+      technique: PrintTechnique; // Use the expanded PrintTechnique type
       layers: Array<{
         type: 'file';
         url: string;
@@ -322,7 +332,7 @@ export function generateMockupCacheKey(
   placement: MockupPlacement = 'front',
   position?: MockupPosition,
   styleId?: number,
-  technique?: 'dtg' | 'dtfilm' | 'embroidery' | 'digital'
+  technique?: PrintTechnique
 ): string {
   // Include position data in hash if provided
   const positionStr = position
@@ -364,7 +374,7 @@ export async function generateMockup(
   placement: MockupPlacement = 'front',
   position?: MockupPosition,
   styleId?: number,
-  technique?: 'dtg' | 'dtfilm' | 'embroidery' | 'digital'
+  technique?: PrintTechnique
 ): Promise<MockupResult> {
   // Debug logging
   console.log('[generateMockup] Parameters:', {
@@ -388,13 +398,28 @@ export async function generateMockup(
   // Technique selection logic (priority order):
   // 1. Explicit technique parameter (user-selected) - HIGHEST PRIORITY
   // 2. Derive from placement name when using styles (e.g., embroidery_front → embroidery)
-  // 3. Default technique based on product type (legacy fallback)
+  // 3. Default technique based on product type using authoritative mapping
 
-  const selectedTechnique = technique
+  let selectedTechnique: PrintTechnique = technique
     ? technique  // Use explicit technique if provided
     : styleId
       ? getTechniqueFromPlacement(placement)  // Derive from placement when using styles
-      : getDefaultTechnique(productName);     // Legacy: default for product type
+      : getDefaultTechniqueForProduct(productName).technique;  // Use authoritative mapping
+
+  // VALIDATION: Auto-correct invalid technique-product combinations
+  // This prevents errors like DTG being applied to stickers
+  if (technique) {
+    // Only validate/correct if user explicitly provided a technique
+    const validation = validateTechniqueForProduct(productName, technique);
+    if (!validation.valid && validation.suggestedTechnique) {
+      console.warn(
+        `[Mockup] Invalid technique "${technique}" for "${productName}". ` +
+        `Auto-correcting to "${validation.suggestedTechnique}". ` +
+        `Reason: ${validation.reason}`
+      );
+      selectedTechnique = validation.suggestedTechnique;
+    }
+  }
 
   const mappedPlacement = styleId
     ? placement  // Use placement as-is from style's placements array
@@ -424,6 +449,7 @@ export async function generateMockup(
   // IMPORTANT: Placements array is ALWAYS required
   // When using style_id, the style determines the mockup template (flat lay, model, etc.)
   // but we still specify where to place the design
+  // NOTE: We don't pass thread_colors for embroidery - it converts the design to monochrome
   const request: MockupRequest = {
     format: 'jpg',
     products: [
@@ -535,79 +561,34 @@ export async function generateMockup(
 
 /**
  * Get available printing techniques for a product type
- * Used to show technique selector options in the UI
+ * Uses the authoritative technique-mapping module
  *
- * @param productType - Product type (from product name or category)
+ * @param productType - Product type or product name
  * @returns Array of available techniques for this product
  */
 export function getAvailableTechniques(
   productType: string
-): Array<{ value: 'dtg' | 'dtfilm' | 'embroidery' | 'digital'; label: string; description: string }> {
-  const lowerType = productType.toLowerCase();
+): Array<{ value: PrintTechnique; label: string; description: string }> {
+  // Use the authoritative mapping to get valid techniques
+  const techniqueInfos = getValidTechniquesForProduct(productType);
 
-  // Hats/Caps - Support both DTFilm and Embroidery
-  if (
-    lowerType.includes('hat') ||
-    lowerType.includes('cap') ||
-    lowerType.includes('beanie')
-  ) {
-    return [
-      {
-        value: 'embroidery',
-        label: 'Embroidery',
-        description: 'Classic stitched design, premium look'
-      },
-      {
-        value: 'dtfilm',
-        label: 'DTF Print',
-        description: 'Full-color print, more detail'
-      }
-    ];
-  }
-
-  // Mugs/Cups - Digital printing (sublimation)
-  if (
-    lowerType.includes('mug') ||
-    lowerType.includes('cup')
-  ) {
-    return [
-      {
-        value: 'digital',
-        label: 'Digital Print',
-        description: 'Vibrant, permanent print'
-      }
-    ];
-  }
-
-  // Stickers - Digital printing
-  if (lowerType.includes('sticker')) {
-    return [
-      {
-        value: 'digital',
-        label: 'Full Color Print',
-        description: 'High-quality digital print'
-      }
-    ];
-  }
-
-  // Apparel - DTG (most common)
-  // Includes: t-shirts, sweatshirts, hoodies, polos, tank tops, long sleeves
-  return [
-    {
-      value: 'dtg',
-      label: 'Direct-to-Garment',
-      description: 'Soft, high-quality print'
-    }
-  ];
+  return techniqueInfos.map((info) => ({
+    value: info.technique,
+    label: info.label,
+    description: info.description,
+  }));
 }
 
 /**
  * Derive technique from placement name
  * When using mockup styles, the placement name tells us which technique to use
+ *
+ * Note: For sublimation products (mugs), use 'sublimation' not 'digital'
+ * The placement alone doesn't tell us if it's sublimation - use product type
  */
 export function getTechniqueFromPlacement(
   placement: string
-): 'dtg' | 'dtfilm' | 'embroidery' | 'digital' {
+): PrintTechnique {
   const lowerPlacement = placement.toLowerCase();
 
   // Embroidery placements
@@ -620,7 +601,23 @@ export function getTechniqueFromPlacement(
     return 'dtfilm';
   }
 
-  // Digital for default (usually mugs, sublimation products)
+  // Sublimation placements (mugs, cups)
+  if (lowerPlacement.includes('sublimation')) {
+    return 'sublimation';
+  }
+
+  // UV placements
+  if (lowerPlacement.includes('uv')) {
+    return 'uv';
+  }
+
+  // Knitting placements
+  if (lowerPlacement.includes('knit')) {
+    return 'knitting';
+  }
+
+  // Digital for default (usually stickers, magnets - NOT mugs)
+  // Note: Mugs should use sublimation, this is a fallback for stickers/magnets
   if (lowerPlacement === 'default') {
     return 'digital';
   }
@@ -631,36 +628,16 @@ export function getTechniqueFromPlacement(
 
 /**
  * Get default technique for product type
- * Note: This is LEGACY - only used when NO styleId is provided
- * When using styles, use getTechniqueFromPlacement() instead
+ * Uses the authoritative technique-mapping module
+ *
+ * Note: This is kept for backward compatibility but now uses the
+ * authoritative mapping that properly handles all product types.
  */
 export function getDefaultTechnique(
   productType: string
-): 'dtg' | 'dtfilm' | 'embroidery' | 'digital' {
-  const lowerType = productType.toLowerCase();
-
-  // DTFilm for hats (faster than embroidery)
-  if (lowerType.includes('hat') || lowerType.includes('cap') || lowerType.includes('beanie')) {
-    return 'dtfilm';
-  }
-
-  // Digital for mugs, cups, and all-over prints (formerly sublimation)
-  if (lowerType.includes('mug') || lowerType.includes('cup') || lowerType.includes('all-over')) {
-    return 'digital';
-  }
-
-  // Digital for stickers, magnets, and other specialty items
-  if (
-    lowerType.includes('sticker') ||
-    lowerType.includes('magnet') ||
-    lowerType.includes('decal')
-  ) {
-    return 'digital';
-  }
-
-  // Default to DTG (direct-to-garment) for all apparel
-  // This includes: t-shirts, hoodies, sweatshirts, polos, tank tops, long sleeves
-  return 'dtg';
+): PrintTechnique {
+  // Use the authoritative mapping
+  return getDefaultTechniqueForProduct(productType).technique;
 }
 
 /**
@@ -671,7 +648,7 @@ export function getDefaultTechnique(
 export function mapPlacementForProduct(
   placement: MockupPlacement,
   productType: string,
-  technique: 'dtg' | 'dtfilm' | 'embroidery' | 'digital'
+  technique: PrintTechnique
 ): string {
   const lowerType = productType.toLowerCase();
 

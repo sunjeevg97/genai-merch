@@ -21,23 +21,25 @@ import { useCart } from '@/lib/cart/store';
  * Empty Cart State
  *
  * Shown when cart has no items.
+ * Uses warm, friendly copy per UX guidelines.
  */
 function EmptyCart() {
   return (
     <div className="flex min-h-[400px] flex-col items-center justify-center py-12 text-center">
-      <div className="mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-gray-100">
-        <PackageOpen className="h-12 w-12 text-gray-400" />
+      <div className="mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-muted">
+        <PackageOpen className="h-12 w-12 text-muted-foreground" />
       </div>
 
-      <h2 className="mb-2 text-2xl font-bold text-gray-900">Your cart is empty</h2>
-      <p className="mb-8 max-w-md text-gray-600">
-        Start creating custom designs for your favorite products and add them to your
-        cart.
+      <h2 className="mb-2 text-2xl font-bold">
+        Your cart is feeling lonely 🥺
+      </h2>
+      <p className="mb-8 max-w-md text-muted-foreground">
+        Let&apos;s fill it with something amazing!
       </p>
 
       <div className="flex flex-col gap-3 sm:flex-row">
         <Button asChild size="lg">
-          <Link href="/design">
+          <Link href="/design/create">
             <Sparkles className="mr-2 h-5 w-5" />
             Start Designing
           </Link>
@@ -65,18 +67,18 @@ export default function CartPage() {
       <div className="mb-8">
         <Link
           href="/products"
-          className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900"
+          className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="mr-1 h-4 w-4" />
           Continue Shopping
         </Link>
 
-        <h1 className="mt-4 text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+        <h1 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">
           Shopping Cart
         </h1>
 
         {itemCount > 0 && (
-          <p className="mt-2 text-sm text-gray-600">
+          <p className="mt-2 text-sm text-muted-foreground">
             You have {itemCount} {itemCount === 1 ? 'item' : 'items'} in your cart
           </p>
         )}

@@ -8,7 +8,7 @@
 
 import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { CheckCircle, Package, ArrowRight, Loader2 } from 'lucide-react';
+import { CheckCircle, Package, ArrowRight, Loader2, Home, ShoppingBag } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -140,7 +140,7 @@ function SuccessPageContent() {
       <div className="flex min-h-[600px] items-center justify-center">
         <div className="text-center">
           <Loader2 className="mx-auto h-12 w-12 animate-spin text-primary" />
-          <p className="mt-4 text-lg text-gray-600">Loading order details...</p>
+          <p className="mt-4 text-lg text-muted-foreground">Loading order details...</p>
         </div>
       </div>
     );
@@ -151,7 +151,7 @@ function SuccessPageContent() {
       <div className="flex min-h-[600px] items-center justify-center">
         <Card className="max-w-md">
           <CardHeader>
-            <CardTitle className="text-red-600">Order Not Found</CardTitle>
+            <CardTitle className="text-text-error">Order Not Found</CardTitle>
             <CardDescription>{error || 'Unable to load order details'}</CardDescription>
           </CardHeader>
           <CardContent>
@@ -168,13 +168,12 @@ function SuccessPageContent() {
     <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
       {/* Success Header */}
       <div className="mb-8 text-center">
-        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
-          <CheckCircle className="h-10 w-10 text-green-600" />
+        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-text-success/10">
+          <CheckCircle className="h-10 w-10 text-text-success" />
         </div>
-        <h1 className="text-3xl font-bold text-gray-900">Order Confirmed!</h1>
-        <p className="mt-2 text-lg text-gray-600">
-          Thank you for your order. We&apos;ve received your payment and will begin processing your
-          order shortly.
+        <h1 className="text-3xl font-bold">Woohoo! You did it! 🎉</h1>
+        <p className="mt-2 text-lg text-muted-foreground">
+          Your order is confirmed and we&apos;re getting things ready.
         </p>
       </div>
 
@@ -186,13 +185,13 @@ function SuccessPageContent() {
               <CardTitle>Order {orderDetails.orderNumber}</CardTitle>
               <CardDescription>Order placed successfully</CardDescription>
             </div>
-            <Package className="h-8 w-8 text-gray-400" />
+            <Package className="h-8 w-8 text-muted-foreground" />
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Order Items */}
           <div>
-            <h3 className="mb-3 font-semibold text-gray-900">Order Items</h3>
+            <h3 className="mb-3 font-semibold text-foreground">Order Items</h3>
             <div className="space-y-3">
               {orderDetails.items.map((item) => (
                 <div key={item.id} className="flex items-center gap-4">
@@ -204,11 +203,11 @@ function SuccessPageContent() {
                     />
                   </div>
                   <div className="flex-1">
-                    <p className="font-medium text-gray-900">{item.productName}</p>
-                    <p className="text-sm text-gray-600">{item.variantName}</p>
-                    <p className="text-sm text-gray-500">Quantity: {item.quantity}</p>
+                    <p className="font-medium text-foreground">{item.productName}</p>
+                    <p className="text-sm text-muted-foreground">{item.variantName}</p>
+                    <p className="text-sm text-muted-foreground">Quantity: {item.quantity}</p>
                   </div>
-                  <p className="font-medium text-gray-900">
+                  <p className="font-medium text-foreground">
                     {formatPrice(item.unitPrice * item.quantity)}
                   </p>
                 </div>
@@ -222,8 +221,8 @@ function SuccessPageContent() {
           {orderDetails.shippingAddress && (
             <>
               <div>
-                <h3 className="mb-2 font-semibold text-gray-900">Shipping Address</h3>
-                <div className="text-sm text-gray-600">
+                <h3 className="mb-2 font-semibold text-foreground">Shipping Address</h3>
+                <div className="text-sm text-muted-foreground">
                   <p>{orderDetails.shippingAddress.name}</p>
                   <p>{orderDetails.shippingAddress.address1}</p>
                   {orderDetails.shippingAddress.address2 && (
@@ -243,44 +242,49 @@ function SuccessPageContent() {
           {/* Order Totals */}
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Subtotal</span>
-              <span className="font-medium text-gray-900">
+              <span className="text-muted-foreground">Subtotal</span>
+              <span className="font-medium text-foreground">
                 {formatPrice(orderDetails.subtotal)}
               </span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Shipping</span>
-              <span className="font-medium text-gray-900">
+              <span className="text-muted-foreground">Shipping</span>
+              <span className="font-medium text-foreground">
                 {formatPrice(orderDetails.shipping)}
               </span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Tax</span>
-              <span className="font-medium text-gray-900">{formatPrice(orderDetails.tax)}</span>
+              <span className="text-muted-foreground">Tax</span>
+              <span className="font-medium text-foreground">{formatPrice(orderDetails.tax)}</span>
             </div>
             <Separator />
             <div className="flex justify-between text-lg">
-              <span className="font-semibold text-gray-900">Total</span>
-              <span className="font-bold text-gray-900">{formatPrice(orderDetails.total)}</span>
+              <span className="font-semibold text-foreground">Total</span>
+              <span className="font-bold text-foreground">{formatPrice(orderDetails.total)}</span>
             </div>
           </div>
         </CardContent>
       </Card>
 
       {/* Action Buttons */}
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
+        <Button onClick={() => router.push(`/orders/${orderDetails.orderId}`)}>
+          Track Your Order
+          <ArrowRight className="ml-2 h-4 w-4" />
+        </Button>
         <Button variant="outline" onClick={() => router.push('/products')}>
+          <ShoppingBag className="mr-2 h-4 w-4" />
           Continue Shopping
         </Button>
-        <Button onClick={() => router.push(`/orders/${orderDetails.orderId}`)}>
-          Track Order
-          <ArrowRight className="ml-2 h-4 w-4" />
+        <Button variant="ghost" onClick={() => router.push('/dashboard')}>
+          <Home className="mr-2 h-4 w-4" />
+          Back to Dashboard
         </Button>
       </div>
 
       {/* Email Confirmation Notice */}
-      <p className="mt-6 text-center text-sm text-gray-500">
-        A confirmation email with order details has been sent to your email address.
+      <p className="mt-6 text-center text-sm text-muted-foreground">
+        We&apos;ve sent a confirmation to your email. Check your inbox (or spam, just in case)!
       </p>
     </div>
   );

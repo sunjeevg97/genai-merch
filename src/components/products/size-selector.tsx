@@ -1,12 +1,11 @@
 /**
  * Size Selector Component
  *
- * Displays size options as tabs (smallest to largest).
+ * Displays size options as compact pill buttons (smallest to largest).
  */
 
 'use client';
 
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 
 export interface SizeOption {
@@ -27,26 +26,35 @@ export function SizeSelector({ sizes, selectedSize, onSizeChange }: SizeSelector
   }
 
   return (
-    <div className="space-y-3">
-      <label className="text-sm font-medium text-gray-900">Size</label>
+    <div className="space-y-2">
+      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+        Size
+      </label>
 
-      <Tabs value={selectedSize || undefined} onValueChange={onSizeChange}>
-        <TabsList className="grid w-full h-9" style={{ gridTemplateColumns: `repeat(${sizes.length}, minmax(0, 1fr))` }}>
-          {sizes.map((size) => (
-            <TabsTrigger
+      <div className="flex flex-wrap gap-1.5">
+        {sizes.map((size) => {
+          const isSelected = selectedSize === size.value;
+
+          return (
+            <button
               key={size.value}
-              value={size.value}
+              type="button"
               disabled={!size.available}
+              onClick={() => onSizeChange(size.value)}
               className={cn(
-                'h-8 px-2 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground',
-                !size.available && 'opacity-50 cursor-not-allowed line-through'
+                'px-3 py-1.5 text-xs font-medium rounded-full transition-all',
+                'border focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                isSelected
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-transparent text-foreground border-border hover:border-primary/50 hover:bg-muted',
+                !size.available && 'opacity-40 line-through cursor-not-allowed hover:bg-transparent hover:border-border'
               )}
             >
               {size.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
+            </button>
+          );
+        })}
+      </div>
 
       {selectedSize && !sizes.find((s) => s.value === selectedSize)?.available && (
         <p className="text-sm text-destructive">This size is currently out of stock</p>

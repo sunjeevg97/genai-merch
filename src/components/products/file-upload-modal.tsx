@@ -197,28 +197,28 @@ export function FileUploadModal({
               {...getRootProps()}
               className={`
                 cursor-pointer rounded-lg border-2 border-dashed p-8 text-center transition-colors
-                ${isDragActive ? 'border-primary bg-primary/5' : 'border-gray-300'}
+                ${isDragActive ? 'border-primary bg-primary/5' : 'border-border'}
                 ${isDragReject ? 'border-destructive bg-destructive/10' : ''}
                 hover:border-primary hover:bg-primary/5
               `}
             >
               <input {...getInputProps()} />
               <div className="flex flex-col items-center">
-                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100">
-                  <Upload className="h-8 w-8 text-gray-400" />
+                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+                  <Upload className="h-8 w-8 text-muted-foreground" />
                 </div>
 
                 {isDragActive ? (
-                  <p className="text-sm text-gray-700">Drop your design file here...</p>
+                  <p className="text-sm text-foreground">Drop your design file here...</p>
                 ) : (
                   <>
-                    <p className="mb-2 text-sm font-semibold text-gray-900">
+                    <p className="mb-2 text-sm font-semibold text-foreground">
                       Drag and drop your design file
                     </p>
-                    <p className="mb-4 text-xs text-gray-600">
+                    <p className="mb-4 text-xs text-muted-foreground">
                       or click to browse files
                     </p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-muted-foreground">
                       Supports PNG, JPG (max 5MB)
                     </p>
                   </>
@@ -229,18 +229,18 @@ export function FileUploadModal({
 
           {/* File Preview */}
           {file && uploadStatus === 'idle' && (
-            <div className="rounded-lg border border-gray-200 p-4">
+            <div className="rounded-lg border border-border p-4">
               <div className="flex items-start gap-3">
                 <div className="flex-shrink-0">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-md bg-gray-100">
-                    <Upload className="h-6 w-6 text-gray-400" />
+                  <div className="flex h-12 w-12 items-center justify-center rounded-md bg-muted">
+                    <Upload className="h-6 w-6 text-muted-foreground" />
                   </div>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="truncate text-sm font-semibold text-gray-900">
+                  <p className="truncate text-sm font-semibold text-foreground">
                     {file.name}
                   </p>
-                  <p className="text-xs text-gray-600">
+                  <p className="text-xs text-muted-foreground">
                     {(file.size / 1024 / 1024).toFixed(2)} MB
                   </p>
                 </div>
@@ -280,15 +280,15 @@ export function FileUploadModal({
                 </p>
               </div>
               <Progress value={uploadProgress} className="h-2" />
-              <p className="text-xs text-gray-600">{uploadProgress}% complete</p>
+              <p className="text-xs text-muted-foreground">{uploadProgress}% complete</p>
             </div>
           )}
 
           {/* Success State */}
           {uploadStatus === 'success' && (
-            <div className="flex items-center gap-3 rounded-lg bg-green-50 p-4">
-              <CheckCircle2 className="h-5 w-5 text-green-600" />
-              <p className="text-sm font-medium text-green-900">
+            <div className="flex items-center gap-3 rounded-lg bg-text-success/10 p-4">
+              <CheckCircle2 className="h-5 w-5 text-text-success" />
+              <p className="text-sm font-medium text-text-success">
                 Design uploaded successfully!
               </p>
             </div>
@@ -297,9 +297,9 @@ export function FileUploadModal({
           {/* Error State */}
           {uploadStatus === 'error' && (
             <div className="space-y-3">
-              <div className="flex items-center gap-3 rounded-lg bg-red-50 p-4">
-                <AlertCircle className="h-5 w-5 text-red-600" />
-                <p className="text-sm font-medium text-red-900">
+              <div className="flex items-center gap-3 rounded-lg bg-text-error/10 p-4">
+                <AlertCircle className="h-5 w-5 text-text-error" />
+                <p className="text-sm font-medium text-text-error">
                   Upload failed. Please try again.
                 </p>
               </div>

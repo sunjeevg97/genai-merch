@@ -126,8 +126,8 @@ export function MockupStyleSelector({
           <CardDescription>Choose a presentation style before we generate your mockup</CardDescription>
         </CardHeader>
         <CardContent className="flex items-center justify-center py-8">
-          <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-          <span className="ml-3 text-sm text-gray-600">Loading styles...</span>
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <span className="ml-3 text-sm text-muted-foreground">Loading styles...</span>
         </CardContent>
       </Card>
     );
@@ -161,7 +161,7 @@ export function MockupStyleSelector({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-gray-600">No mockup styles available for this product.</p>
+          <p className="text-sm text-muted-foreground">No mockup styles available for this product.</p>
         </CardContent>
       </Card>
     );
@@ -203,7 +203,7 @@ export function MockupStyleSelector({
                 )}
                 {isGenerating && (
                   <div className="absolute top-2 right-2">
-                    <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                   </div>
                 )}
 
@@ -211,7 +211,7 @@ export function MockupStyleSelector({
                 <div className="w-full flex items-center justify-center mb-2">
                   <Layers className={cn(
                     "h-8 w-8",
-                    selectedStyleId === style.id ? "text-primary-foreground" : "text-gray-400"
+                    selectedStyleId === style.id ? "text-primary-foreground" : "text-muted-foreground"
                   )} />
                 </div>
 
@@ -222,7 +222,7 @@ export function MockupStyleSelector({
                   </div>
                   <div className={cn(
                     "text-xs opacity-75",
-                    selectedStyleId === style.id ? "text-primary-foreground" : "text-gray-600"
+                    selectedStyleId === style.id ? "text-primary-foreground" : "text-muted-foreground"
                   )}>
                     {friendly.category}
                   </div>
@@ -233,13 +233,13 @@ export function MockupStyleSelector({
         </div>
 
         <div className="flex items-center justify-between">
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-muted-foreground">
             {selectedStyleId
               ? 'Switch between styles instantly'
               : 'Select a style to begin generating your mockup'}
           </p>
           {backgroundGenerating && (
-            <div className="flex items-center gap-1 text-xs text-gray-500">
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
               <Loader2 className="h-3 w-3 animate-spin" />
               <span>Generating previews...</span>
             </div>

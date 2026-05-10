@@ -2,18 +2,19 @@
  * Design Preview Component
  *
  * Shows preview of custom design with option to change/remove.
+ * Integrates with the design wizard for the return-to-product flow.
  */
 
 'use client';
 
-import { useState } from 'react';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { X, Upload, Sparkles, Images } from 'lucide-react';
+import { X, Sparkles, Wand2, Check, Palette } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import Link from 'next/link';
-import { DesignGalleryModal } from './design-gallery-modal';
-import { FileUploadModal } from './file-upload-modal';
+import { Badge } from '@/components/ui/badge';
+import { useDesignWizard } from '@/lib/store/design-wizard';
 
 export interface DesignData {
   id: string;
@@ -25,120 +26,110 @@ interface DesignPreviewProps {
   design: DesignData | null;
   onDesignChange?: (design: DesignData) => void;
   onRemove?: () => void;
+  productId?: string; // Product ID for return-to-product flow
 }
 
-export function DesignPreview({ design, onDesignChange, onRemove }: DesignPreviewProps) {
-  const [showGallery, setShowGallery] = useState(false);
-  const [showUpload, setShowUpload] = useState(false);
+export function DesignPreview({ design, onDesignChange, onRemove, productId }: DesignPreviewProps) {
+  const router = useRouter();
+  const { finalDesignUrl, setReturnToProductId } = useDesignWizard();
 
-  function handleSelectDesign(selectedDesign: DesignData) {
-    if (onDesignChange) {
-      onDesignChange(selectedDesign);
+  // Check if we have a design from the wizard store that we should use
+  useEffect(() => {
+    if (finalDesignUrl && !design && onDesignChange) {
+      // Auto-apply design from wizard store
+      onDesignChange({
+        id: 'wizard-design',
+        imageUrl: finalDesignUrl,
+        thumbnailUrl: finalDesignUrl,
+      });
     }
-  }
+  }, [finalDesignUrl, design, onDesignChange]);
 
-  function handleUploadComplete(uploadedDesign: DesignData) {
-    if (onDesignChange) {
-      onDesignChange(uploadedDesign);
+  /**
+   * Handle "Create with AI" button click
+   * Sets the returnToProductId so user comes back to this product after wizard
+   */
+  const handleCreateWithAI = () => {
+    if (productId) {
+      setReturnToProductId(productId);
     }
-  }
+    router.push('/design/create');
+  };
 
   if (!design) {
-    // Show "Add Design" options when no design
+    // Show prominent "Create with AI" CTA when no design
     return (
-      <>
-        <div className="space-y-3">
-          <label className="text-sm font-medium text-gray-900">Custom Design (Optional)</label>
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-foreground">Make it yours! 🎨</label>
 
-          <Card className="border-dashed">
-            <CardContent className="flex flex-col items-center justify-center py-8 text-center">
-              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100">
-                <Sparkles className="h-8 w-8 text-gray-400" />
-              </div>
+        <Card className="border-2 border-dashed border-primary/30 bg-gradient-to-br from-primary/5 to-primary/10 hover:border-primary/50 transition-colors">
+          <CardContent className="flex flex-col items-center justify-center py-8 text-center">
+            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-primary/30">
+              <Wand2 className="h-8 w-8 text-primary" />
+            </div>
 
-              <h3 className="mb-2 font-semibold text-gray-900">Add Custom Design</h3>
-              <p className="mb-4 text-sm text-gray-600">
-                Make this product unique with a custom design
-              </p>
+            <h3 className="mb-2 text-lg font-semibold text-foreground">Create with AI</h3>
+            <p className="mb-4 max-w-xs text-sm text-muted-foreground">
+              Describe your idea and let our AI work its magic. Takes just a minute!
+            </p>
 
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <Button asChild variant="default" size="sm">
-                  <Link href="/design/create">
-                    <Sparkles className="mr-2 h-4 w-4" />
-                    Create with AI
-                  </Link>
-                </Button>
+            <Button onClick={handleCreateWithAI} size="lg" className="gap-2">
+              <Sparkles className="h-4 w-4" />
+              Start Designing
+            </Button>
 
-                <Button variant="outline" size="sm" onClick={() => setShowGallery(true)}>
-                  <Images className="mr-2 h-4 w-4" />
-                  Browse Designs
-                </Button>
-
-                <Button variant="outline" size="sm" onClick={() => setShowUpload(true)}>
-                  <Upload className="mr-2 h-4 w-4" />
-                  Upload Design
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Modals */}
-        <DesignGalleryModal
-          open={showGallery}
-          onOpenChange={setShowGallery}
-          onSelectDesign={handleSelectDesign}
-        />
-
-        <FileUploadModal
-          open={showUpload}
-          onOpenChange={setShowUpload}
-          onUploadComplete={handleUploadComplete}
-        />
-      </>
+            <p className="mt-4 text-xs text-muted-foreground">
+              Or add to cart without a design — your call!
+            </p>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   // Show design preview when design exists
   return (
     <div className="space-y-3">
-      <label className="text-sm font-medium text-gray-900">Custom Design</label>
+      <div className="flex items-center gap-2">
+        <label className="text-sm font-medium text-foreground">Looking good! ✓</label>
+        <Badge variant="secondary" className="gap-1 bg-text-success/10 text-text-success border-0">
+          <Check className="h-3 w-3" />
+          Design Applied
+        </Badge>
+      </div>
 
-      <Card>
+      <Card className="border-text-success/20 bg-text-success/5">
         <CardContent className="p-4">
           <div className="flex items-start gap-4">
             {/* Design Thumbnail */}
-            <div className="relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-md bg-gray-100">
+            <div className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-lg border-2 border-white bg-white shadow-md">
               <Image
                 src={design.thumbnailUrl || design.imageUrl}
                 alt="Custom design"
                 fill
-                sizes="80px"
-                className="object-cover"
+                sizes="96px"
+                className="object-contain p-1"
+                unoptimized={design.imageUrl.startsWith('data:')}
               />
             </div>
 
             {/* Design Info */}
-            <div className="flex flex-1 flex-col justify-between">
+            <div className="flex flex-1 flex-col justify-between min-h-[96px]">
               <div>
-                <p className="font-semibold text-gray-900">Custom Design Applied</p>
-                <p className="text-sm text-gray-600">
-                  Your design will be printed on this product
+                <p className="font-semibold text-foreground">Your Custom Design</p>
+                <p className="text-sm text-muted-foreground">
+                  Created just now
                 </p>
               </div>
 
               {/* Actions */}
-              <div className="mt-2 flex gap-2">
-                <Button asChild variant="outline" size="sm">
-                  <Link href={`/design?designId=${design.id}`}>Edit Design</Link>
-                </Button>
-
+              <div className="mt-2 flex items-center gap-3">
                 {onRemove && (
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={onRemove}
-                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                   >
                     <X className="mr-1 h-4 w-4" />
                     Remove
@@ -146,6 +137,17 @@ export function DesignPreview({ design, onDesignChange, onRemove }: DesignPrevie
                 )}
               </div>
             </div>
+          </div>
+
+          {/* Create different design link */}
+          <div className="mt-4 pt-3 border-t border-text-success/20">
+            <button
+              onClick={handleCreateWithAI}
+              className="flex items-center gap-2 text-sm text-primary hover:text-primary/80 transition-colors"
+            >
+              <Palette className="h-4 w-4" />
+              Want something different? Create a new design
+            </button>
           </div>
         </CardContent>
       </Card>

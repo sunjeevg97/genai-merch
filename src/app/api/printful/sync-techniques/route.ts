@@ -5,106 +5,20 @@
  * - Available printing techniques (DTG, DTFilm, Embroidery, Digital)
  * - Available placements for each technique
  * - Stores this data in database for fast lookups
+ *
+ * Uses the authoritative technique-mapping module to ensure correct
+ * technique assignment based on product type, not just placement name.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-
-/**
- * Technique mapping from Printful placement names to our normalized technique names
- */
-function detectTechniqueFromPlacement(placement: string): {
-  technique: 'dtg' | 'dtfilm' | 'embroidery' | 'digital';
-  label: string;
-  description: string;
-} | null {
-  const p = placement.toLowerCase();
-
-  // Embroidery placements
-  if (p.includes('embroidery')) {
-    return {
-      technique: 'embroidery',
-      label: 'Embroidery',
-      description: 'Classic stitched design, premium look',
-    };
-  }
-
-  // DTFilm placements
-  if (p.includes('_dtf') || p.includes('dtfilm')) {
-    return {
-      technique: 'dtfilm',
-      label: 'DTF Print',
-      description: 'Full-color print, more detail',
-    };
-  }
-
-  // Digital (sublimation) - typically for mugs, all-over prints
-  if (p === 'default' || p === 'front_center' || p === 'center') {
-    // These are ambiguous - could be DTG or Digital
-    // We'll determine based on product type context
-    return null; // Will be handled specially
-  }
-
-  // DTG (standard placements)
-  if (['front', 'back', 'left', 'right', 'sleeve_left', 'sleeve_right', 'front_large', 'back_large'].includes(p)) {
-    return {
-      technique: 'dtg',
-      label: 'Direct-to-Garment',
-      description: 'High-quality, detailed print',
-    };
-  }
-
-  return null;
-}
-
-/**
- * Determine technique based on product type for ambiguous placements
- */
-function getTechniqueForProduct(
-  productName: string,
-  placement: string
-): {
-  technique: 'dtg' | 'dtfilm' | 'embroidery' | 'digital';
-  label: string;
-  description: string;
-} {
-  const name = productName.toLowerCase();
-
-  // Mugs, cups -> digital (sublimation)
-  if (name.includes('mug') || name.includes('cup')) {
-    return {
-      technique: 'digital',
-      label: 'Digital Print',
-      description: 'Vibrant, permanent print',
-    };
-  }
-
-  // Stickers -> digital
-  if (name.includes('sticker')) {
-    return {
-      technique: 'digital',
-      label: 'Full Color Print',
-      description: 'High-quality digital print',
-    };
-  }
-
-  // Hats/caps with standard placements -> DTFilm
-  if ((name.includes('hat') || name.includes('cap') || name.includes('beanie')) &&
-      ['front', 'back', 'default', 'center', 'front_center'].includes(placement.toLowerCase())) {
-    return {
-      technique: 'dtfilm',
-      label: 'DTF Print',
-      description: 'Full-color print, more detail',
-    };
-  }
-
-  // Default to DTG for apparel
-  return {
-    technique: 'dtg',
-    label: 'Direct-to-Garment',
-    description: 'High-quality, detailed print',
-  };
-}
+import {
+  inferTechniqueFromProductAndPlacement,
+  getDefaultTechniqueForProduct,
+  extractTechniqueFromPlacement,
+  getProductTypeFromName,
+  type TechniqueInfo,
+} from '@/lib/printful/technique-mapping';
 
 /**
  * Get friendly label for placement
@@ -237,16 +151,22 @@ export async function POST(request: NextRequest) {
 
         console.log(`[Sync] Found ${allPlacements.size} unique placements:`, Array.from(allPlacements));
 
-        // Group placements by technique
+        // Log product type detection for debugging
+        const detectedProductType = getProductTypeFromName(product.name);
+        console.log(
+          `[Sync] Product type for "${product.name}": ${detectedProductType || 'unknown (will default to DTG)'}`
+        );
+
+        // Group placements by technique using the authoritative mapping
+        // This uses product-type-first logic to avoid the DTG bug for stickers/mugs
         const techniqueGroups = new Map<string, Set<string>>();
 
         for (const placement of allPlacements) {
-          let techniqueInfo = detectTechniqueFromPlacement(placement);
-
-          // If ambiguous, use product type to determine
-          if (!techniqueInfo) {
-            techniqueInfo = getTechniqueForProduct(product.name, placement);
-          }
+          // Use the authoritative inference function that checks product type FIRST
+          const techniqueInfo = inferTechniqueFromProductAndPlacement(
+            product.name,
+            placement
+          );
 
           if (!techniqueGroups.has(techniqueInfo.technique)) {
             techniqueGroups.set(techniqueInfo.technique, new Set());
@@ -254,20 +174,24 @@ export async function POST(request: NextRequest) {
           techniqueGroups.get(techniqueInfo.technique)!.add(placement);
         }
 
-        console.log(`[Sync] Detected ${techniqueGroups.size} techniques:`, Array.from(techniqueGroups.keys()));
+        console.log(
+          `[Sync] Detected ${techniqueGroups.size} techniques:`,
+          Array.from(techniqueGroups.keys())
+        );
+
+        // Get the default technique for this product
+        const defaultTechniqueInfo = getDefaultTechniqueForProduct(product.name);
 
         // Create/update techniques and placements in database
         for (const [technique, placements] of techniqueGroups.entries()) {
-          const techniqueInfo = technique === 'dtg'
-            ? { technique: 'dtg' as const, label: 'Direct-to-Garment', description: 'High-quality, detailed print' }
-            : technique === 'dtfilm'
-            ? { technique: 'dtfilm' as const, label: 'DTF Print', description: 'Full-color print, more detail' }
-            : technique === 'embroidery'
-            ? { technique: 'embroidery' as const, label: 'Embroidery', description: 'Classic stitched design, premium look' }
-            : { technique: 'digital' as const, label: 'Digital Print', description: 'Vibrant, permanent print' };
+          // Get the full technique info
+          const techniqueInfo = inferTechniqueFromProductAndPlacement(
+            product.name,
+            Array.from(placements)[0] // Use first placement to get info
+          );
 
-          // Determine if this should be the default technique for this product
-          const isDefault = technique === getTechniqueForProduct(product.name, 'front').technique;
+          // Check if this is the default technique for this product
+          const isDefault = technique === defaultTechniqueInfo.technique;
 
           // Upsert technique
           const productTechnique = await prisma.productTechnique.upsert({

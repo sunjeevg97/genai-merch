@@ -49,3 +49,6 @@ next-env.d.ts
 
 # supabase
 supabase/.temp
+# Trigger.dev build artifacts
+.trigger/tmp/
+dev.log

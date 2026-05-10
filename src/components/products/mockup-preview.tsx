@@ -29,7 +29,7 @@ import { useCart } from '@/lib/cart/store';
 import type { ProductVariant } from '@prisma/client';
 
 interface TechniqueOption {
-  value: 'dtg' | 'dtfilm' | 'embroidery' | 'digital';
+  value: string;
   label: string;
   description: string;
   isDefault: boolean;
@@ -47,6 +47,9 @@ interface MockupPreviewProps {
   productType: string;
   placement?: MockupPlacement;
   onPlacementChange?: (placement: MockupPlacement) => void;
+  // External technique control (synced with VariantSelector)
+  selectedTechnique?: string | null;
+  onTechniqueChange?: (technique: string) => void;
   // Additional data needed for cart functionality
   product?: {
     id: string;
@@ -70,11 +73,27 @@ export function MockupPreview({
   productType,
   placement = 'front',
   onPlacementChange,
+  selectedTechnique: externalTechnique,
+  onTechniqueChange: externalOnTechniqueChange,
   product,
   selectedVariant,
   design,
 }: MockupPreviewProps) {
-  const [selectedTechnique, setSelectedTechnique] = useState<'dtg' | 'dtfilm' | 'embroidery' | 'digital' | undefined>(undefined);
+  // Use external technique if provided, otherwise use internal state
+  const [internalTechnique, setInternalTechnique] = useState<string | undefined>(undefined);
+
+  // Determine if we're using external control
+  const isExternallyControlled = externalTechnique !== undefined && externalOnTechniqueChange !== undefined;
+  const selectedTechnique = isExternallyControlled ? externalTechnique : internalTechnique;
+
+  // Wrapper function for changing technique
+  const setSelectedTechnique = (technique: string | undefined) => {
+    if (isExternallyControlled && technique) {
+      externalOnTechniqueChange(technique);
+    } else {
+      setInternalTechnique(technique);
+    }
+  };
   const [batchGenerating, setBatchGenerating] = useState(false);
   const [generatedMockups, setGeneratedMockups] = useState<Array<{
     styleId: number;
@@ -314,31 +333,51 @@ export function MockupPreview({
 
       console.log('[Batch Generation] Allowed placements for', selectedTechnique, ':', Array.from(allowedPlacements));
 
-      // Step 3: Build list of all combinations (style × placement) for selected technique
+      // Step 2.5: Smart style selection - for each placement, find the BEST style that supports it
+      // Style priority order: "default" (product photo) is usually best quality
+      const STYLE_PRIORITY = ['default', 'ghost', 'model', 'lifestyle', 'hanger', 'placeholder'];
+
+      // Pre-sort styles by priority (best first)
+      const sortedStyles = [...styles].sort((a, b) => {
+        const aPriority = STYLE_PRIORITY.indexOf(a.category_name.toLowerCase());
+        const bPriority = STYLE_PRIORITY.indexOf(b.category_name.toLowerCase());
+        return (aPriority === -1 ? 99 : aPriority) - (bPriority === -1 ? 99 : bPriority);
+      });
+
+      // Placements to exclude (they require multi-placement requests)
+      const excludedPlacements = new Set(['label_inside', 'label_outside', 'label_inside_dtf']);
+
+      // Step 3: For each allowed placement, find the best style that supports it
       const combinations: Array<{
         styleId: number;
         styleName: string;
         placement: string;
       }> = [];
 
-      // Placements to exclude from batch generation (they require multi-placement requests)
-      const excludedPlacements = new Set(['label_inside', 'label_outside', 'label_inside_dtf']);
+      // Get all placements we want to generate mockups for
+      const targetPlacements = Array.from(allowedPlacements).filter(
+        (p) => !excludedPlacements.has(p)
+      );
 
-      for (const style of styles) {
-        // Filter placements that match the allowed placements from database
-        const techniquePlacements = style.placements.filter((p: string) =>
-          allowedPlacements.has(p) && !excludedPlacements.has(p)
+      for (const placement of targetPlacements) {
+        // Find the best style (highest priority) that supports this placement
+        const bestStyleForPlacement = sortedStyles.find((style: any) =>
+          style.placements.includes(placement)
         );
 
-        // Add all combinations for this style
-        for (const placement of techniquePlacements) {
+        if (bestStyleForPlacement) {
           combinations.push({
-            styleId: style.id,
-            styleName: getFriendlyStyleLabel(style.category_name, style.view_name),
+            styleId: bestStyleForPlacement.id,
+            styleName: getFriendlyStyleLabel(bestStyleForPlacement.category_name, bestStyleForPlacement.view_name),
             placement,
           });
+          console.log(`[Batch Generation] Placement "${placement}" → best style: ${bestStyleForPlacement.category_name} - ${bestStyleForPlacement.view_name}`);
+        } else {
+          console.log(`[Batch Generation] No style found for placement "${placement}"`);
         }
       }
+
+      console.log('[Batch Generation] Generated', combinations.length, 'mockups (1 per placement)')
 
       console.log('[Batch Generation] Generated', combinations.length, 'combinations for', selectedTechnique);
       console.log('[Batch Generation] Combinations:', combinations.map(c => `${c.styleName} (${c.placement})`));
@@ -447,24 +486,37 @@ export function MockupPreview({
           selectedTechniqueData.placements.map(p => p.value)
         );
 
-        // Step 3: Build list of all combinations (style × placement) for selected technique
+        // Step 3: For each placement, find the best style (same logic as batch generation)
+        const STYLE_PRIORITY = ['default', 'ghost', 'model', 'lifestyle', 'hanger', 'placeholder'];
+        const sortedStyles = [...styles].sort((a: any, b: any) => {
+          const aPriority = STYLE_PRIORITY.indexOf(a.category_name.toLowerCase());
+          const bPriority = STYLE_PRIORITY.indexOf(b.category_name.toLowerCase());
+          return (aPriority === -1 ? 99 : aPriority) - (bPriority === -1 ? 99 : bPriority);
+        });
+
+        // Placements to exclude
         const excludedPlacements = new Set(['label_inside', 'label_outside', 'label_inside_dtf']);
 
+        // Build combinations: 1 best style per placement
         const combinations: Array<{
           styleId: number;
           styleName: string;
           placement: string;
         }> = [];
 
-        for (const style of styles) {
-          const techniquePlacements = style.placements.filter((p: string) =>
-            allowedPlacements.has(p) && !excludedPlacements.has(p)
+        const targetPlacements = Array.from(allowedPlacements).filter(
+          (p) => !excludedPlacements.has(p)
+        );
+
+        for (const placement of targetPlacements) {
+          const bestStyleForPlacement = sortedStyles.find((style: any) =>
+            style.placements.includes(placement)
           );
 
-          for (const placement of techniquePlacements) {
+          if (bestStyleForPlacement) {
             combinations.push({
-              styleId: style.id,
-              styleName: getFriendlyStyleLabel(style.category_name, style.view_name),
+              styleId: bestStyleForPlacement.id,
+              styleName: getFriendlyStyleLabel(bestStyleForPlacement.category_name, bestStyleForPlacement.view_name),
               placement,
             });
           }
@@ -614,7 +666,7 @@ export function MockupPreview({
   // Show default product image if no design
   if (!designUrl) {
     return (
-      <div className="relative aspect-square overflow-hidden rounded-lg bg-gray-100">
+      <div className="relative aspect-square overflow-hidden rounded-lg bg-muted">
         <Image
           src={productImageUrl}
           alt="Product"
@@ -633,16 +685,16 @@ export function MockupPreview({
         {/* Technique Selector */}
         <Card>
           <CardContent className="pt-6">
-            <h3 className="mb-4 font-semibold text-gray-900">Select Printing Technique</h3>
+            <h3 className="mb-4 font-semibold text-foreground">Select Printing Technique</h3>
             <div className="grid gap-3">
               {availableTechniques.map((tech) => (
                 <button
                   key={tech.value}
                   onClick={() => setSelectedTechnique(tech.value)}
-                  className="flex flex-col items-start rounded-lg border-2 border-gray-200 p-4 text-left transition-all hover:border-primary hover:bg-primary/5"
+                  className="flex flex-col items-start rounded-lg border-2 border-border p-4 text-left transition-all hover:border-primary hover:bg-primary/5"
                 >
-                  <div className="font-semibold text-gray-900">{tech.label}</div>
-                  <div className="text-sm text-gray-600">{tech.description}</div>
+                  <div className="font-semibold text-foreground">{tech.label}</div>
+                  <div className="text-sm text-muted-foreground">{tech.description}</div>
                 </button>
               ))}
             </div>
@@ -669,7 +721,7 @@ export function MockupPreview({
       <div className="space-y-4">
         {/* Technique Badge */}
         <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-600">Printing Technique:</span>
+          <span className="text-sm text-muted-foreground">Printing Technique:</span>
           <Badge variant="secondary" className="bg-primary/10 text-primary">
             {availableTechniques.find(t => t.value === selectedTechnique)?.label}
           </Badge>
@@ -729,7 +781,7 @@ export function MockupPreview({
         {generatedMockups.length > 0 && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-gray-900">
+              <h3 className="font-semibold text-foreground">
                 Generated Mockups ({generatedMockups.length})
               </h3>
               {!batchGenerating && (
@@ -757,7 +809,7 @@ export function MockupPreview({
                 >
                   <div className="flex items-center gap-4 p-4">
                     {/* Mockup image on left */}
-                    <div className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100">
+                    <div className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-lg bg-muted">
                       <Image
                         src={mockup.mockupUrl}
                         alt={`${mockup.styleName} - ${mockup.placement}`}
@@ -769,10 +821,10 @@ export function MockupPreview({
 
                     {/* Details in center */}
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900 truncate">
+                      <p className="font-medium text-foreground truncate">
                         {mockup.styleName}
                       </p>
-                      <p className="text-sm text-gray-600">
+                      <p className="text-sm text-muted-foreground">
                         {getFriendlyPlacementLabel(mockup.placement)}
                       </p>
                     </div>
@@ -805,7 +857,7 @@ export function MockupPreview({
                 {/* Two-column layout: Image left, Details right */}
                 <div className="grid gap-6 md:grid-cols-2">
                   {/* Left: Large Mockup Image */}
-                  <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-gray-100">
+                  <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-muted">
                     <Image
                       src={selectedMockup.mockupUrl}
                       alt={`${selectedMockup.styleName} - ${selectedMockup.placement}`}
@@ -819,32 +871,32 @@ export function MockupPreview({
                   <div className="flex flex-col space-y-6">
                     {/* Configuration Details */}
                     <div className="space-y-3">
-                      <h3 className="font-semibold text-gray-900">Configuration</h3>
+                      <h3 className="font-semibold text-foreground">Configuration</h3>
 
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Style:</span>
-                          <p className="font-medium text-gray-900">{selectedMockup.styleName}</p>
+                          <span className="text-muted-foreground">Style:</span>
+                          <p className="font-medium text-foreground">{selectedMockup.styleName}</p>
                         </div>
 
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Placement:</span>
-                          <p className="font-medium text-gray-900">
+                          <span className="text-muted-foreground">Placement:</span>
+                          <p className="font-medium text-foreground">
                             {getFriendlyPlacementLabel(selectedMockup.placement)}
                           </p>
                         </div>
 
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Technique:</span>
-                          <p className="font-medium text-gray-900">
+                          <span className="text-muted-foreground">Technique:</span>
+                          <p className="font-medium text-foreground">
                             {availableTechniques.find(t => t.value === selectedTechnique)?.label}
                           </p>
                         </div>
 
                         {selectedVariant && (
                           <div className="flex justify-between">
-                            <span className="text-gray-600">Variant:</span>
-                            <p className="font-medium text-gray-900">{selectedVariant.name}</p>
+                            <span className="text-muted-foreground">Variant:</span>
+                            <p className="font-medium text-foreground">{selectedVariant.name}</p>
                           </div>
                         )}
                       </div>
@@ -852,22 +904,22 @@ export function MockupPreview({
 
                     {/* Price Display */}
                     {selectedVariant && (
-                      <div className="rounded-lg bg-gray-50 p-4">
+                      <div className="rounded-lg bg-muted p-4">
                         <div className="flex items-baseline justify-between">
                           <div>
-                            <p className="text-sm text-gray-600">Price per item</p>
-                            <p className="text-2xl font-bold text-gray-900">
+                            <p className="text-sm text-muted-foreground">Price per item</p>
+                            <p className="text-2xl font-bold text-foreground">
                               {formatPrice(selectedVariant.price)}
                             </p>
                             {quantity > 1 && (
-                              <p className="mt-1 text-sm text-gray-600">
+                              <p className="mt-1 text-sm text-muted-foreground">
                                 Total: {formatPrice(selectedVariant.price * quantity)}
                               </p>
                             )}
                           </div>
 
                           {selectedVariant.inStock ? (
-                            <Badge className="bg-green-100 text-green-800">In Stock</Badge>
+                            <Badge className="bg-text-success/10 text-text-success">In Stock</Badge>
                           ) : (
                             <Badge variant="destructive">Out of Stock</Badge>
                           )}
@@ -877,7 +929,7 @@ export function MockupPreview({
 
                     {/* Quantity Selector */}
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-900">Quantity</label>
+                      <label className="text-sm font-medium text-foreground">Quantity</label>
                       <div className="flex items-center gap-3">
                         <Button
                           variant="outline"
@@ -906,7 +958,7 @@ export function MockupPreview({
                           <Plus className="h-4 w-4" />
                         </Button>
 
-                        <span className="text-sm text-gray-600">Max 10</span>
+                        <span className="text-sm text-muted-foreground">Max 10</span>
                       </div>
                     </div>
 
@@ -931,7 +983,7 @@ export function MockupPreview({
 
                     {/* Stock Warning */}
                     {selectedVariant && !selectedVariant.inStock && (
-                      <p className="text-center text-sm text-red-600">
+                      <p className="text-center text-sm text-text-error">
                         This variant is currently out of stock. Please select a different size or color.
                       </p>
                     )}

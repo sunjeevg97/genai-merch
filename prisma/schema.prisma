@@ -85,8 +85,9 @@ model Product {
   metadata    Json? // Printful product data
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
-  variants    ProductVariant[]
-  techniques  ProductTechnique[]
+  variants     ProductVariant[]
+  techniques   ProductTechnique[]
+  mockupCaches MockupCache[]
 
   @@index([printfulId])
   @@index([category])
@@ -302,4 +303,24 @@ model OrderStatusHistory {
 
   @@index([orderId])
   @@index([createdAt])
+}
+
+// Cached mockup images for pre-generation (7-day TTL)
+model MockupCache {
+  id        String   @id @default(cuid())
+  cacheKey  String   @unique // Format: mockup:{variantId}:{placement}:style{styleId}:{technique}:{designUrlHash}
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variantId String
+  designUrl String   @db.Text
+  placement String
+  technique String
+  styleId   Int?
+  mockupUrl String   @db.Text
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([productId])
+  @@index([expiresAt])
+  @@index([designUrl])
 }

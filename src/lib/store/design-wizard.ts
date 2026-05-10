@@ -2,11 +2,14 @@
  * Design Wizard Store
  *
  * Zustand store for managing the AI-first design wizard state.
- * This store orchestrates the multi-step design creation flow:
+ * This store orchestrates the 3-step design creation flow:
  * 1. Event Type Selection
  * 2. Event Details
  * 3. AI Chat Interface (Design Generation)
- * 4. Product Selection & Checkout
+ *
+ * After design selection, users are directed to /products to browse
+ * and add items to cart. The wizard supports a return-to-product flow
+ * when users create designs from a product detail page.
  *
  * @module lib/store/design-wizard
  */
@@ -199,14 +202,14 @@ export interface DesignFeedback {
 /**
  * Wizard Steps
  *
- * Enumeration of the five steps in the streamlined design wizard flow.
+ * Enumeration of the three steps in the streamlined design wizard flow.
+ * After completing the wizard, users are directed to /products to browse
+ * and apply their design to products.
  */
 export enum WizardStep {
   EventType = 1,      // Step 1: Select event type/purpose
   EventDetails = 2,   // Step 2: Provide event details
   AiChat = 3,         // Step 3: AI chat interface for design generation
-  Products = 4,       // Step 4: Select products
-  Checkout = 5,       // Step 5: Review cart and checkout
 }
 
 /**
@@ -222,15 +225,23 @@ export interface DesignWizardState {
 
   /**
    * Current active step in the wizard
-   * 1 = Event Type, 2 = Event Details, 3 = AI Chat, 4 = Products
+   * 1 = Event Type, 2 = Event Details, 3 = AI Chat
    */
   currentStep: WizardStep;
 
   /**
    * Whether the wizard has been completed
-   * Set to true when user completes checkout
+   * Set to true when user selects final design
    */
   isComplete: boolean;
+
+  /**
+   * Product ID to return to after wizard completion
+   * Set when user navigates to wizard from a product detail page
+   * Used to redirect back to that product after design selection
+   * @default null
+   */
+  returnToProductId: string | null;
 
   // ============================================================================
   // Step 1: Event Type Selection
@@ -378,7 +389,7 @@ export interface DesignWizardState {
 
   /**
    * Jump to a specific step in the wizard
-   * @param step - The step number to navigate to (1-5)
+   * @param step - The step number to navigate to (1-3)
    */
   goToStep: (step: WizardStep) => void;
 
@@ -387,6 +398,19 @@ export interface DesignWizardState {
    * Clears all selections and returns to step 1
    */
   resetWizard: () => void;
+
+  /**
+   * Set the product ID to return to after wizard completion
+   * @param productId - The product ID to return to, or null to clear
+   */
+  setReturnToProductId: (productId: string | null) => void;
+
+  /**
+   * Complete the design wizard
+   * Called when user selects their final design in step 3
+   * Marks wizard as complete and prepares for navigation to products
+   */
+  completeDesignWizard: () => void;
 
   // ============================================================================
   // Step 1 Actions: Event Type
@@ -607,6 +631,7 @@ export interface DesignWizardState {
 const initialState = {
   currentStep: WizardStep.EventType,
   isComplete: false,
+  returnToProductId: null,
   eventType: null,
   eventDetails: {},
   brandAssets: {
@@ -668,12 +693,12 @@ export const useDesignWizard = create<DesignWizardState>()(
         nextStep: () => {
           const { currentStep } = get();
           console.log('[Design Wizard Store] nextStep called, currentStep:', currentStep);
-          if (currentStep < WizardStep.Checkout) {
+          if (currentStep < WizardStep.AiChat) {
             const newStep = currentStep + 1;
             set({ currentStep: newStep });
             console.log('[Design Wizard Store] Moved to step:', newStep);
           } else {
-            console.log('[Design Wizard Store] Already at final step, cannot proceed');
+            console.log('[Design Wizard Store] Already at final step (AiChat), cannot proceed');
           }
         },
 
@@ -739,7 +764,36 @@ export const useDesignWizard = create<DesignWizardState>()(
             // Clear product selection
             recommendedProducts: [],
             selectedProducts: [],
+
+            // Clear return to product
+            returnToProductId: null,
           });
+        },
+
+        /**
+         * Set Return To Product ID
+         *
+         * Sets the product ID to navigate back to after wizard completion.
+         * Used when user starts wizard from a product detail page.
+         */
+        setReturnToProductId: (productId: string | null) => {
+          console.log('[DesignWizard] Setting returnToProductId:', productId);
+          set({ returnToProductId: productId });
+        },
+
+        /**
+         * Complete Design Wizard
+         *
+         * Called when user selects their final design and is ready to apply it.
+         * Marks the wizard as complete and logs the completion.
+         */
+        completeDesignWizard: () => {
+          const { finalDesignUrl, returnToProductId } = get();
+          console.log('[DesignWizard] Completing wizard', {
+            hasFinalDesign: !!finalDesignUrl,
+            returnToProductId,
+          });
+          set({ isComplete: true });
         },
 
         // ========================================================================
@@ -987,27 +1041,94 @@ export const useDesignWizard = create<DesignWizardState>()(
       }),
       {
         name: 'design-wizard-storage', // localStorage key
-        partialize: (state) => ({
-          // Only persist essential state, exclude UI-specific state
-          currentStep: state.currentStep,
-          eventType: state.eventType,
-          eventDetails: state.eventDetails,
-          brandAssets: state.brandAssets,
-          questionAnswers: state.questionAnswers,
-          currentQuestionIndex: state.currentQuestionIndex,
-          totalQuestions: state.totalQuestions,
-          designVarietyLevel: state.designVarietyLevel,
-          designFeedback: state.designFeedback,
-          generatedDesigns: state.generatedDesigns,
-          selectedDesignId: state.selectedDesignId,
-          finalDesignUrl: state.finalDesignUrl,
-          savedDesignId: state.savedDesignId,
-          printReadyUrl: state.printReadyUrl,
-          preparationStatus: state.preparationStatus,
-          preparationError: state.preparationError,
-          recommendedProducts: state.recommendedProducts,
-          selectedProducts: state.selectedProducts,
-        }),
+        // Custom storage with error handling for quota exceeded errors
+        storage: {
+          getItem: (name) => {
+            try {
+              const str = localStorage.getItem(name);
+              return str ? JSON.parse(str) : null;
+            } catch (error) {
+              console.error('[DesignWizard] Failed to read from localStorage:', error);
+              return null;
+            }
+          },
+          setItem: (name, value) => {
+            try {
+              localStorage.setItem(name, JSON.stringify(value));
+            } catch (error) {
+              // Quota exceeded - log warning but don't crash
+              console.warn('[DesignWizard] Failed to persist to localStorage (quota exceeded):', error);
+              // Try to clear and save minimal state
+              try {
+                localStorage.removeItem(name);
+                console.log('[DesignWizard] Cleared storage due to quota error');
+              } catch (e) {
+                // Ignore cleanup errors
+              }
+            }
+          },
+          removeItem: (name) => {
+            try {
+              localStorage.removeItem(name);
+            } catch (error) {
+              console.error('[DesignWizard] Failed to remove from localStorage:', error);
+            }
+          },
+        },
+        // Handle localStorage errors gracefully (quota exceeded, corrupted data)
+        onRehydrateStorage: () => (state, error) => {
+          if (error) {
+            console.error('[DesignWizard] Failed to rehydrate from localStorage:', error);
+            // Clear corrupted storage
+            try {
+              localStorage.removeItem('design-wizard-storage');
+              console.log('[DesignWizard] Cleared corrupted storage');
+            } catch (e) {
+              console.error('[DesignWizard] Failed to clear storage:', e);
+            }
+          }
+        },
+        // Type assertion needed because Zustand v5 typing expects full state
+        // but partialize intentionally returns only the fields we want to persist
+        partialize: (state) => {
+          // Filter out base64 data URLs from generatedDesigns to prevent localStorage quota errors
+          // Base64 images from AI generation can be 1-5MB each, exceeding localStorage limits
+          // HTTP URLs (from Supabase Storage after save) are safe to persist
+          const isHttpUrl = (url: string) => url.startsWith('http://') || url.startsWith('https://');
+
+          const persistableDesigns = state.generatedDesigns.filter(
+            design => isHttpUrl(design.imageUrl)
+          );
+
+          // Only persist finalDesignUrl if it's an HTTP URL (not base64)
+          const persistableFinalDesignUrl = state.finalDesignUrl && isHttpUrl(state.finalDesignUrl)
+            ? state.finalDesignUrl
+            : null;
+
+          return {
+            // Only persist essential state, exclude UI-specific state
+            currentStep: state.currentStep,
+            returnToProductId: state.returnToProductId,
+            eventType: state.eventType,
+            eventDetails: state.eventDetails,
+            brandAssets: state.brandAssets,
+            questionAnswers: state.questionAnswers,
+            currentQuestionIndex: state.currentQuestionIndex,
+            totalQuestions: state.totalQuestions,
+            designVarietyLevel: state.designVarietyLevel,
+            designFeedback: state.designFeedback,
+            // Only persist designs with HTTP URLs (not base64 data URLs)
+            generatedDesigns: persistableDesigns,
+            selectedDesignId: persistableDesigns.length > 0 ? state.selectedDesignId : null,
+            finalDesignUrl: persistableFinalDesignUrl,
+            savedDesignId: state.savedDesignId,
+            printReadyUrl: state.printReadyUrl,
+            preparationStatus: state.preparationStatus,
+            preparationError: state.preparationError,
+            recommendedProducts: state.recommendedProducts,
+            selectedProducts: state.selectedProducts,
+          } as DesignWizardState;
+        },
       }
     ),
     {

@@ -1,7 +1,8 @@
 /**
  * Variant Selector Component
  *
- * Combines size and color selection to choose product variant.
+ * Combines size, color, and technique selection in an inline layout.
+ * Technique selector only shown when product supports multiple techniques.
  */
 
 'use client';
@@ -10,8 +11,10 @@ import { useEffect, useMemo } from 'react';
 import type { ProductVariant } from '@prisma/client';
 import { SizeSelector, type SizeOption } from './size-selector';
 import { ColorSelector, type ColorOption } from './color-selector';
+import { TechniqueSelector, type TechniqueOption } from './technique-selector';
 import { sortSizes, formatSizeLabel } from '@/lib/utils/size-ordering';
 import { parseSizeFromVariant, parseColorFromVariant } from '@/lib/utils/variant-parsing';
+import type { PrintTechnique } from '@/lib/printful/technique-mapping';
 
 interface VariantSelectorProps {
   variants: ProductVariant[];
@@ -20,6 +23,10 @@ interface VariantSelectorProps {
   onSizeChange: (size: string) => void;
   onColorChange: (color: string) => void;
   onVariantChange: (variant: ProductVariant | null) => void;
+  // Optional technique props - only used for products with multiple techniques
+  techniques?: TechniqueOption[];
+  selectedTechnique?: PrintTechnique | null;
+  onTechniqueChange?: (technique: PrintTechnique) => void;
 }
 
 /**
@@ -86,6 +93,9 @@ export function VariantSelector({
   onSizeChange,
   onColorChange,
   onVariantChange,
+  techniques,
+  selectedTechnique,
+  onTechniqueChange,
 }: VariantSelectorProps) {
   // Extract available sizes and colors
   const sizes = useMemo(() => extractSizes(variants), [variants]);
@@ -143,24 +153,42 @@ export function VariantSelector({
   }, [selectedSize, selectedColor, colors, onColorChange]);
 
   return (
-    <div className="space-y-6">
-      {/* Size Selector */}
-      {sizes.length > 0 && (
-        <SizeSelector
-          sizes={sizes}
-          selectedSize={selectedSize}
-          onSizeChange={onSizeChange}
-        />
-      )}
+    <div className="space-y-4">
+      {/* Inline layout: Size | Color | Technique */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-8">
+        {/* Size Section - takes available space */}
+        {sizes.length > 0 && (
+          <div className="flex-1 min-w-0">
+            <SizeSelector
+              sizes={sizes}
+              selectedSize={selectedSize}
+              onSizeChange={onSizeChange}
+            />
+          </div>
+        )}
 
-      {/* Color Selector */}
-      {colors.length > 0 && (
-        <ColorSelector
-          colors={colors}
-          selectedColor={selectedColor}
-          onColorChange={onColorChange}
-        />
-      )}
+        {/* Color Section - shrinks to fit content */}
+        {colors.length > 0 && (
+          <div className="shrink-0">
+            <ColorSelector
+              colors={colors}
+              selectedColor={selectedColor}
+              onColorChange={onColorChange}
+            />
+          </div>
+        )}
+
+        {/* Technique Section - only shown when multiple techniques available */}
+        {techniques && techniques.length > 1 && selectedTechnique && onTechniqueChange && (
+          <div className="shrink-0">
+            <TechniqueSelector
+              techniques={techniques}
+              selectedTechnique={selectedTechnique}
+              onTechniqueChange={onTechniqueChange}
+            />
+          </div>
+        )}
+      </div>
 
       {/* Variant Not Found Warning */}
       {selectedSize && selectedColor && !variants.find((v) => {

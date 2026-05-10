@@ -148,7 +148,7 @@ export function MockupControls({ onPositionChange, disabled = false }: MockupCon
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <Label htmlFor="size-slider">Design Size</Label>
-            <span className="text-sm font-medium text-gray-700">{sizePercent}%</span>
+            <span className="text-sm font-medium text-foreground">{sizePercent}%</span>
           </div>
           <Slider
             id="size-slider"
@@ -160,7 +160,7 @@ export function MockupControls({ onPositionChange, disabled = false }: MockupCon
             disabled={disabled}
             className="w-full"
           />
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-muted-foreground">
             Smaller sizes work better for pocket designs
           </p>
         </div>
@@ -275,7 +275,7 @@ export function MockupControls({ onPositionChange, disabled = false }: MockupCon
           </Button>
         </div>
 
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-muted-foreground">
           Click &quot;Apply Changes&quot; to regenerate the mockup with new settings
         </p>
       </CardContent>

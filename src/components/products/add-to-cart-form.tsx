@@ -113,86 +113,78 @@ export function AddToCartForm({ product, selectedVariant, design }: AddToCartFor
 
   return (
     <div className="space-y-6">
-      {/* Price Display */}
-      <div className="rounded-lg bg-gray-50 p-4">
-        <div className="flex items-baseline justify-between">
-          <div>
-            <p className="text-sm text-gray-600">Price</p>
-            {selectedVariant ? (
-              <>
-                <p className="text-3xl font-bold text-gray-900">
-                  {formatPrice(selectedVariant.price)}
+      {/* Price Display - Large & Bold */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          {selectedVariant ? (
+            <>
+              <p className="text-4xl font-bold tracking-tight text-foreground">
+                {formatPrice(selectedVariant.price)}
+              </p>
+              {quantity > 1 && (
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Total: <span className="font-medium text-foreground">{formatPrice(totalPrice)}</span>
                 </p>
-                {quantity > 1 && (
-                  <p className="mt-1 text-sm text-gray-600">
-                    Total: {formatPrice(totalPrice)}
-                  </p>
-                )}
-              </>
-            ) : (
-              <p className="text-2xl font-semibold text-gray-500">Select variant</p>
-            )}
-          </div>
-
-          {selectedVariant && (
-            <div className="text-right">
-              {selectedVariant.inStock ? (
-                <span className="inline-flex items-center rounded-full bg-success/10 px-3 py-1 text-sm font-medium text-success">
-                  In Stock
-                </span>
-              ) : (
-                <span className="inline-flex items-center rounded-full bg-destructive/10 px-3 py-1 text-sm font-medium text-destructive">
-                  Out of Stock
-                </span>
               )}
-            </div>
+            </>
+          ) : (
+            <p className="text-2xl font-medium text-muted-foreground">Select size & color</p>
           )}
         </div>
+
+        {selectedVariant && (
+          <div>
+            {selectedVariant.inStock ? (
+              <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-3 py-1 text-sm font-medium text-emerald-400 ring-1 ring-inset ring-emerald-500/20">
+                In Stock
+              </span>
+            ) : (
+              <span className="inline-flex items-center rounded-full bg-red-500/10 px-3 py-1 text-sm font-medium text-red-400 ring-1 ring-inset ring-red-500/20">
+                Out of Stock
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Quantity Selector */}
-      <div className="space-y-2">
-        <label className="text-sm font-medium text-gray-900">Quantity</label>
-
-        <div className="flex items-center gap-3">
-          {/* Decrease Quantity */}
+      {/* Quantity Selector - Inline */}
+      <div className="flex items-center gap-4">
+        <span className="text-sm font-medium text-muted-foreground">Quantity</span>
+        <div className="flex items-center rounded-lg border border-border bg-card">
           <Button
-            variant="outline"
-            size="icon"
+            variant="ghost"
+            size="sm"
+            className="h-9 w-9 rounded-r-none hover:bg-muted"
             onClick={() => handleQuantityChange(quantity - 1)}
             disabled={quantity <= 1}
           >
-            <Minus className="h-4 w-4" />
+            <Minus className="h-3.5 w-3.5" />
           </Button>
-
-          {/* Quantity Input */}
           <Input
             type="number"
             min="1"
             max="10"
             value={quantity}
             onChange={(e) => handleQuantityChange(parseInt(e.target.value) || 1)}
-            className="w-20 text-center"
+            className="h-9 w-14 border-0 bg-transparent text-center focus-visible:ring-0 focus-visible:ring-offset-0"
           />
-
-          {/* Increase Quantity */}
           <Button
-            variant="outline"
-            size="icon"
+            variant="ghost"
+            size="sm"
+            className="h-9 w-9 rounded-l-none hover:bg-muted"
             onClick={() => handleQuantityChange(quantity + 1)}
             disabled={quantity >= 10}
           >
-            <Plus className="h-4 w-4" />
+            <Plus className="h-3.5 w-3.5" />
           </Button>
-
-          <span className="text-sm text-gray-600">Max 10 per order</span>
         </div>
+        <span className="text-xs text-muted-foreground">Max 10</span>
       </div>
 
       {/* Add to Cart Button */}
       <Button
         size="lg"
-        className="w-full"
+        className="w-full text-base font-semibold"
         disabled={!selectedVariant || !selectedVariant.inStock || isAdding}
         onClick={handleAddToCart}
       >
@@ -202,7 +194,7 @@ export function AddToCartForm({ product, selectedVariant, design }: AddToCartFor
 
       {/* Stock Warning */}
       {selectedVariant && !selectedVariant.inStock && (
-        <p className="text-center text-sm text-red-600">
+        <p className="text-center text-sm text-red-400">
           This variant is currently out of stock. Please select a different size or color.
         </p>
       )}

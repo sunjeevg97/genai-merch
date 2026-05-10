@@ -74,7 +74,7 @@ export async function getSupabaseUser(clerkUserId: string) {
 
       if (!email) {
         console.error('[Clerk] No email found for user:', clerkUserId);
-        return null;
+        throw new Error('No email address found on Clerk account');
       }
 
       // Extract name
@@ -82,20 +82,30 @@ export async function getSupabaseUser(clerkUserId: string) {
         ? `${clerkUser.firstName} ${clerkUser.lastName}`.trim()
         : clerkUser.firstName || clerkUser.lastName || null;
 
-      // Create user in database
-      console.log(`[Clerk] Creating user in database: ${email}`);
-      user = await prisma.user.create({
-        data: {
+      // Create or update user in database
+      // Use upsert to handle case where email exists with different clerkId
+      console.log(`[Clerk] Creating/updating user in database: ${email}`);
+      user = await prisma.user.upsert({
+        where: { email },
+        update: {
+          clerkId: clerkUserId, // Update to new Clerk ID
+          name: name || undefined, // Only update name if provided
+        },
+        create: {
           clerkId: clerkUserId,
           email,
           name,
         },
       });
 
-      console.log(`[Clerk] User created successfully: ${user.id}`);
+      console.log(`[Clerk] User synced successfully: ${user.id} (clerkId updated: ${user.clerkId === clerkUserId})`);
     } catch (error) {
       console.error('[Clerk] Failed to auto-create user:', error);
-      return null;
+      // Re-throw with more context
+      if (error instanceof Error) {
+        throw new Error(`User sync failed: ${error.message}`);
+      }
+      throw new Error('User sync failed: Unknown error');
     }
   }
 

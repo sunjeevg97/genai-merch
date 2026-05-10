@@ -3,6 +3,7 @@ import { Space_Grotesk, DM_Sans, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Navbar } from "@/components/layout/navbar";
 import { ConditionalFooter } from "@/components/layout/conditional-footer";
+import { MainContentWrapper } from "@/components/layout/authenticated-layout";
 import { ClerkProvider } from "@clerk/nextjs";
 import { ThemeProvider } from "next-themes";
 
@@ -81,8 +82,8 @@ export default function RootLayout({
 }>) {
   return (
     <ClerkProvider
-      signInFallbackRedirectUrl="/design/create"
-      signUpFallbackRedirectUrl="/design/create"
+      signInFallbackRedirectUrl="/dashboard"
+      signUpFallbackRedirectUrl="/dashboard"
     >
       <html lang="en" className="scroll-smooth" suppressHydrationWarning>
         <body
@@ -95,7 +96,9 @@ export default function RootLayout({
             enableSystem={false}
           >
             <Navbar />
-            <main>{children}</main>
+            <MainContentWrapper>
+              <main>{children}</main>
+            </MainContentWrapper>
             <ConditionalFooter />
           </ThemeProvider>
         </body>

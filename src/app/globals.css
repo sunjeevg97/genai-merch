@@ -42,79 +42,47 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+
+  /* ===== EXPANDED TEXT COLOR SYSTEM ===== */
+  /* Text hierarchy */
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-text-subtle: var(--text-subtle);
+
+  /* Accent text colors */
+  --color-text-accent-cyan: var(--text-accent-cyan);
+  --color-text-accent-teal: var(--text-accent-teal);
+  --color-text-accent-purple: var(--text-accent-purple);
+  --color-text-accent-amber: var(--text-accent-amber);
+  --color-text-accent-rose: var(--text-accent-rose);
+  --color-text-accent-emerald: var(--text-accent-emerald);
+
+  /* Link colors */
+  --color-text-link: var(--text-link);
+  --color-text-link-hover: var(--text-link-hover);
+
+  /* Status text colors */
+  --color-text-success: var(--text-success);
+  --color-text-warning: var(--text-warning);
+  --color-text-error: var(--text-error);
+  --color-text-info: var(--text-info);
 }
 
 :root {
-  /* GenAI-Merch Brand Theme - Light Mode */
-  /* Modern, professional palette for AI-powered custom apparel */
+  /* ===== GenAI-Merch Dark Theme (Default) ===== */
+  /* Cyber Blue - Vercel/Cursor-inspired */
+  /* Technical & Precise - True black with cyan accents */
 
   /* Border radius for components */
   --radius: 0.625rem;
 
-  /* Base colors */
-  --background: oklch(1 0 0); /* Pure white background */
-  --foreground: oklch(0.145 0 0); /* Near-black text */
-
-  /* Card components */
-  --card: oklch(1 0 0); /* White cards */
-  --card-foreground: oklch(0.145 0 0);
-
-  /* Popovers and dropdowns */
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-
-  /* Primary brand color - Vibrant purple/blue for creativity & AI */
-  --primary: oklch(0.55 0.25 275); /* Rich purple-blue */
-  --primary-foreground: oklch(0.99 0 0); /* White text on primary */
-
-  /* Secondary actions */
-  --secondary: oklch(0.96 0.005 275); /* Light purple tint */
-  --secondary-foreground: oklch(0.205 0 0);
-
-  /* Muted backgrounds */
-  --muted: oklch(0.97 0 0); /* Slightly off-white */
-  --muted-foreground: oklch(0.556 0 0); /* Medium gray */
-
-  /* Accent color - Complementary for highlights */
-  --accent: oklch(0.65 0.22 45); /* Warm orange for accents */
-  --accent-foreground: oklch(0.99 0 0);
-
-  /* Destructive actions (delete, errors) */
-  --destructive: oklch(0.577 0.245 27.325); /* Red */
-
-  /* Borders and inputs */
-  --border: oklch(0.92 0.005 275); /* Subtle purple-tinted border */
-  --input: oklch(0.92 0.005 275);
-  --ring: oklch(0.55 0.25 275); /* Focus ring matches primary */
-
-  /* Chart colors for data visualization */
-  --chart-1: oklch(0.646 0.222 275); /* Purple */
-  --chart-2: oklch(0.6 0.22 45); /* Orange */
-  --chart-3: oklch(0.6 0.18 185); /* Blue */
-  --chart-4: oklch(0.7 0.18 155); /* Teal */
-  --chart-5: oklch(0.65 0.2 310); /* Pink */
-
-  /* Sidebar navigation */
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.55 0.25 275); /* Match primary */
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.96 0.005 275);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.92 0.005 275);
-  --sidebar-ring: oklch(0.55 0.25 275);
-}
-
-.dark {
-  /* Cyber Blue Theme - Vercel/Cursor-inspired */
-  /* Technical & Precise - True black with cyan accents */
-
   /* Backgrounds - True black base */
-  --background: oklch(0 0 0); /* #000000 - True black */
-  --foreground: oklch(0.93 0 0); /* #EDEDED - Cool white */
+  --background: oklch(0 0 0);           /* #000000 - True black */
+  --foreground: oklch(0.93 0 0);        /* #EDEDED - Cool white */
 
   /* Card components - Near black elevated surfaces */
-  --card: oklch(0.04 0 0); /* #0A0A0A - Near black */
+  --card: oklch(0.04 0 0);              /* #0A0A0A - Near black */
   --card-foreground: oklch(0.93 0 0);
 
   /* Popovers and dropdowns */
@@ -122,40 +90,63 @@
   --popover-foreground: oklch(0.93 0 0);
 
   /* Primary brand color - Bright cyan */
-  --primary: oklch(0.75 0.15 200); /* #06B6D4 - Bright cyan */
-  --primary-foreground: oklch(0 0 0); /* Black text on cyan */
+  --primary: oklch(0.75 0.15 200);      /* #06B6D4 - Bright cyan */
+  --primary-foreground: oklch(0 0 0);   /* Black text on cyan */
 
   /* Secondary actions */
-  --secondary: oklch(0.08 0 0); /* Similar to muted */
+  --secondary: oklch(0.08 0 0);
   --secondary-foreground: oklch(0.93 0 0);
 
   /* Muted backgrounds - Dark panels */
-  --muted: oklch(0.08 0 0); /* #141414 - Dark panels */
+  --muted: oklch(0.08 0 0);             /* #141414 - Dark panels */
   --muted-foreground: oklch(0.64 0.014 265); /* #A1A1AA - Cool gray */
 
   /* Accent color - Light cyan for special elements */
-  --accent: oklch(0.82 0.14 200); /* #22D3EE - Light cyan */
+  --accent: oklch(0.82 0.14 200);       /* #22D3EE - Light cyan */
   --accent-foreground: oklch(0 0 0);
 
   /* Destructive actions - Red */
-  --destructive: oklch(0.62 0.25 25); /* #EF4444 - Red */
+  --destructive: oklch(0.62 0.25 25);   /* #EF4444 - Red */
   --destructive-foreground: oklch(0.93 0 0);
 
   /* Borders and inputs - Zinc with cyan focus */
-  --border: oklch(0.16 0 0); /* #27272A - Zinc borders */
+  --border: oklch(0.16 0 0);            /* #27272A - Zinc borders */
   --input: oklch(0.16 0 0);
-  --ring: oklch(0.75 0.15 200); /* Cyan focus ring */
+  --ring: oklch(0.75 0.15 200);         /* Cyan focus ring */
 
-  /* Additional semantic colors for status badges */
-  --success: oklch(0.70 0.14 180); /* #14B8A6 - Teal */
-  --warning: oklch(0.75 0.18 75); /* #F59E0B - Amber */
+  /* ===== EXPANDED TEXT COLOR SYSTEM ===== */
+
+  /* Primary text hierarchy - legible against dark backgrounds */
+  --text-primary: oklch(0.98 0 0);      /* Near-white, highest contrast */
+  --text-secondary: oklch(0.85 0 0);    /* Slightly muted, great readability */
+  --text-muted: oklch(0.64 0.014 265);  /* Cool gray, secondary content */
+  --text-subtle: oklch(0.45 0 0);       /* Very subtle, hints/placeholders */
+
+  /* Accent text colors - eye-catching against dark backgrounds */
+  --text-accent-cyan: oklch(0.82 0.14 200);   /* Primary accent - bright cyan */
+  --text-accent-teal: oklch(0.70 0.14 180);   /* Success/positive - teal */
+  --text-accent-purple: oklch(0.72 0.18 280); /* Creative/special - purple */
+  --text-accent-amber: oklch(0.80 0.18 75);   /* Warning/attention - amber */
+  --text-accent-rose: oklch(0.70 0.20 15);    /* Error/negative - rose */
+  --text-accent-emerald: oklch(0.72 0.17 160); /* Growth/positive - emerald */
+
+  /* Interactive text states */
+  --text-link: oklch(0.75 0.15 200);          /* Links - matches primary cyan */
+  --text-link-hover: oklch(0.85 0.14 200);    /* Links on hover - brighter */
+  --text-link-visited: oklch(0.65 0.15 280);  /* Visited links - purple tint */
+
+  /* Status text colors - vibrant and distinct */
+  --text-success: oklch(0.70 0.14 180);       /* Teal for success */
+  --text-warning: oklch(0.80 0.18 75);        /* Amber for warnings */
+  --text-error: oklch(0.65 0.22 25);          /* Red for errors */
+  --text-info: oklch(0.75 0.15 200);          /* Cyan for info */
 
   /* Chart colors - Cyan theme */
-  --chart-1: oklch(0.75 0.15 200); /* Cyan */
-  --chart-2: oklch(0.82 0.14 200); /* Light cyan */
-  --chart-3: oklch(0.70 0.14 180); /* Teal */
-  --chart-4: oklch(0.75 0.18 75); /* Amber */
-  --chart-5: oklch(0.62 0.25 25); /* Red */
+  --chart-1: oklch(0.75 0.15 200);      /* Cyan */
+  --chart-2: oklch(0.82 0.14 200);      /* Light cyan */
+  --chart-3: oklch(0.70 0.14 180);      /* Teal */
+  --chart-4: oklch(0.75 0.18 75);       /* Amber */
+  --chart-5: oklch(0.62 0.25 25);       /* Red */
 
   /* Sidebar navigation - True black with cyan accents */
   --sidebar: oklch(0.04 0 0);
@@ -173,11 +164,21 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
     font-family: var(--font-dm-sans), sans-serif;
   }
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-space-grotesk), sans-serif;
     letter-spacing: -0.01em;
+    color: var(--text-primary);
+  }
+  p {
+    color: var(--text-secondary);
+  }
+  a {
+    color: var(--text-link);
+  }
+  a:hover {
+    color: var(--text-link-hover);
   }
 }

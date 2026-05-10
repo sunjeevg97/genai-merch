@@ -242,7 +242,7 @@ export function ColorQuestion({
                     transition={{ type: 'spring', stiffness: 500, damping: 30 }}
                     className={`
                       absolute inset-0 flex items-center justify-center
-                      ${isLight ? 'text-gray-800' : 'text-white'}
+                      ${isLight ? 'text-foreground' : 'text-white'}
                     `}
                   >
                     <Check className="w-8 h-8 drop-shadow-md" strokeWidth={3} />

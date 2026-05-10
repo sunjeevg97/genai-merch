@@ -28,6 +28,7 @@ import { DesignFeedbackComponent } from '@/components/design/design-feedback';
 import { GeneratingDesignsLoader } from '@/components/design/loading/generating-designs-loader';
 import { AIFollowupLoader } from '@/components/design/loading/ai-followup-loader';
 import { ErrorAlert } from '@/components/design/error-alert';
+import { WizardCompletionStep } from '@/components/design/steps/wizard-completion-step';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Info, RefreshCw } from 'lucide-react';
@@ -46,7 +47,8 @@ type FlowState =
   | 'generating' // Generating 3 designs
   | 'results' // Showing 3 designs
   | 'feedback' // Collecting feedback
-  | 'regenerating'; // Regenerating with feedback
+  | 'regenerating' // Regenerating with feedback
+  | 'completion'; // Wizard complete, show CTAs
 
 /**
  * Generated Design Interface
@@ -87,7 +89,6 @@ export function ChatStep() {
     setPrintReadyUrl,
     setPreparationStatus,
     setPreparationError,
-    nextStep,
   } = useDesignWizard();
 
   // Flow state machine
@@ -323,7 +324,10 @@ export function ChatStep() {
       });
 
       if (!saveResponse.ok) {
-        throw new Error('Failed to save design');
+        const errorData = await saveResponse.json().catch(() => ({}));
+        const errorMessage = errorData.message || errorData.error || 'Failed to save design';
+        console.error('[Chat Step] Save API error:', errorData);
+        throw new Error(errorMessage);
       }
 
       const { data: savedDesign } = await saveResponse.json();
@@ -452,8 +456,8 @@ export function ChatStep() {
       return;
     }
 
-    // Move to next wizard step (Product Selection)
-    nextStep();
+    // Show completion screen with CTAs
+    setFlowState('completion');
   };
 
   /**
@@ -651,6 +655,8 @@ export function ChatStep() {
       )}
 
       {flowState === 'regenerating' && <GeneratingDesignsLoader count={3} estimatedTime={20} />}
+
+      {flowState === 'completion' && <WizardCompletionStep />}
     </AnimatePresence>
   );
 }

@@ -1,12 +1,13 @@
 /**
  * Design Wizard Container
  *
- * Main wizard component that orchestrates the streamlined 5-step design flow:
+ * Main wizard component that orchestrates the 3-step design flow:
  * 1. Event Type Selection
  * 2. Event Details
  * 3. AI Chat Interface (with optional brand assets)
- * 4. Product Selection
- * 5. Checkout
+ *
+ * After completing the wizard, users are directed to /products to browse
+ * and apply their design to products.
  *
  * Handles step navigation, progress indication, and transitions.
  * Supports direct navigation via query parameter (?step=X).
@@ -20,8 +21,6 @@ import { useDesignWizard, WizardStep } from '@/lib/store/design-wizard';
 import { EventTypeStep } from '@/components/design/steps/event-type-step';
 import { EventDetailsStep } from '@/components/design/steps/event-details-step';
 import { ChatStep } from '@/components/design/steps/chat-step-new';
-import { ProductShowcaseStep } from '@/components/design/steps/product-showcase-step';
-import { CheckoutStep } from '@/components/design/steps/checkout-step';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Check, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -48,8 +47,6 @@ const STEPS: StepConfig[] = [
   { step: WizardStep.EventType, label: 'Event Type', shortLabel: 'Event' },
   { step: WizardStep.EventDetails, label: 'Event Details', shortLabel: 'Details' },
   { step: WizardStep.AiChat, label: 'AI Design', shortLabel: 'Design' },
-  { step: WizardStep.Products, label: 'Choose Products', shortLabel: 'Products' },
-  { step: WizardStep.Checkout, label: 'Checkout', shortLabel: 'Checkout' },
 ];
 
 /**
@@ -78,13 +75,13 @@ export function DesignWizard() {
       const stepNumber = parseInt(stepParam, 10);
       console.log('[Design Wizard] Parsed step number:', stepNumber);
 
-      // Validate step number is between 1 and 5
-      if (stepNumber >= 1 && stepNumber <= 5) {
+      // Validate step number is between 1 and 3
+      if (stepNumber >= 1 && stepNumber <= 3) {
         console.log('[Design Wizard] Navigating to step:', stepNumber);
         goToStep(stepNumber as WizardStep);
         console.log('[Design Wizard] goToStep called successfully');
       } else {
-        console.log('[Design Wizard] Invalid step number (must be 1-5):', stepNumber);
+        console.log('[Design Wizard] Invalid step number (must be 1-3):', stepNumber);
       }
     } else {
       console.log('[Design Wizard] No step parameter in URL, staying on current step:', currentStep);
@@ -102,10 +99,6 @@ export function DesignWizard() {
         return <EventDetailsStep />;
       case WizardStep.AiChat:
         return <ChatStep />;
-      case WizardStep.Products:
-        return <ProductShowcaseStep />;
-      case WizardStep.Checkout:
-        return <CheckoutStep />;
       default:
         return <EventTypeStep />;
     }
@@ -144,43 +137,46 @@ export function DesignWizard() {
 
               {/* Center: Visual Progress Dots */}
               <div className="flex-1 flex items-center justify-center gap-2">
-                {[1, 2, 3, 4, 5].map((step) => (
-                  <div key={step} className="flex items-center gap-2">
-                    <button
-                      onClick={() => step < currentStep && goToStep(step as WizardStep)}
-                      disabled={step > currentStep}
-                      className={`
-                        relative flex items-center justify-center
-                        w-8 h-8 rounded-full text-xs font-medium
-                        transition-all duration-200
-                        ${step < currentStep
-                          ? 'bg-primary text-primary-foreground cursor-pointer hover:scale-110'
-                          : step === currentStep
-                          ? 'bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2 ring-offset-background'
-                          : 'bg-muted text-muted-foreground cursor-not-allowed'
-                        }
-                      `}
-                    >
-                      {step < currentStep ? (
-                        <Check className="h-4 w-4" />
-                      ) : (
-                        <span>{step}</span>
+                {STEPS.map((stepConfig, index) => {
+                  const stepNum = index + 1;
+                  return (
+                    <div key={stepNum} className="flex items-center gap-2">
+                      <button
+                        onClick={() => stepNum < currentStep && goToStep(stepNum as WizardStep)}
+                        disabled={stepNum > currentStep}
+                        className={`
+                          relative flex items-center justify-center
+                          w-8 h-8 rounded-full text-xs font-medium
+                          transition-all duration-200
+                          ${stepNum < currentStep
+                            ? 'bg-primary text-primary-foreground cursor-pointer hover:scale-110'
+                            : stepNum === currentStep
+                            ? 'bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2 ring-offset-background'
+                            : 'bg-muted text-muted-foreground cursor-not-allowed'
+                          }
+                        `}
+                        title={stepConfig.label}
+                      >
+                        {stepNum < currentStep ? (
+                          <Check className="h-4 w-4" />
+                        ) : (
+                          <span>{stepNum}</span>
+                        )}
+                      </button>
+                      {index < STEPS.length - 1 && (
+                        <div className={`
+                          hidden sm:block w-8 h-0.5
+                          ${stepNum < currentStep ? 'bg-primary' : 'bg-muted'}
+                        `} />
                       )}
-                    </button>
-                    {step < 5 && (
-                      <div className={`
-                        hidden sm:block w-8 h-0.5
-                        ${step < currentStep ? 'bg-primary' : 'bg-muted'}
-                      `} />
-                    )}
-                  </div>
-                ))}
+                    </div>
+                  );
+                })}
               </div>
 
               {/* Right: Restart Icon Button */}
               <div className="shrink-0">
-                {currentStep < 5 && (
-                  <Dialog open={isRestartDialogOpen} onOpenChange={setIsRestartDialogOpen}>
+                <Dialog open={isRestartDialogOpen} onOpenChange={setIsRestartDialogOpen}>
                     <DialogTrigger asChild>
                       <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground">
                         <RotateCcw className="h-4 w-4" />
@@ -211,7 +207,6 @@ export function DesignWizard() {
                       </DialogFooter>
                     </DialogContent>
                   </Dialog>
-                )}
               </div>
             </div>
           </div>

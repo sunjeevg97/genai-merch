@@ -11,6 +11,7 @@ import { getProducts, getProductCounts } from '@/lib/products/queries';
 import { ProductGrid, ProductGridSkeleton } from '@/components/products/product-grid';
 import { ProductFilters } from '@/components/products/product-filters';
 import { EmptyState } from '@/components/products/empty-state';
+import { DesignContextBanner } from '@/components/products/design-context-banner';
 
 export const metadata: Metadata = {
   title: 'Custom Products | GenAI-Merch',
@@ -82,14 +83,17 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
     <div className="container mx-auto px-4 py-8">
       {/* Page Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
           Browse Products
         </h1>
-        <p className="mt-2 text-lg text-gray-600">
+        <p className="mt-2 text-lg text-muted-foreground">
           Discover custom apparel, accessories, and more. Design your perfect
           product with AI.
         </p>
       </div>
+
+      {/* Design Context Banner (shows when design is ready) */}
+      <DesignContextBanner />
 
       {/* Filters */}
       <div className="mb-8">

@@ -110,7 +110,7 @@ export function DesignGalleryModal({
 
         {/* Search */}
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search designs..."
             value={search}
@@ -123,15 +123,15 @@ export function DesignGalleryModal({
         <ScrollArea className="h-[400px] pr-4">
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           ) : designs.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
-              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100">
-                <ImageIcon className="h-8 w-8 text-gray-400" />
+              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+                <ImageIcon className="h-8 w-8 text-muted-foreground" />
               </div>
-              <h3 className="mb-2 font-semibold text-gray-900">No designs found</h3>
-              <p className="mb-4 text-sm text-gray-600">
+              <h3 className="mb-2 font-semibold text-foreground">No designs found</h3>
+              <p className="mb-4 text-sm text-muted-foreground">
                 {search
                   ? 'Try a different search term'
                   : 'Create your first design to get started'}
@@ -153,7 +153,7 @@ export function DesignGalleryModal({
                     ${
                       selectedDesignId === design.id
                         ? 'border-primary ring-2 ring-primary ring-offset-2'
-                        : 'border-gray-200 hover:border-primary'
+                        : 'border-border hover:border-primary'
                     }
                   `}
                 >
@@ -211,7 +211,7 @@ export function DesignGalleryModal({
 
         {/* Footer */}
         <div className="flex items-center justify-between border-t pt-4">
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-muted-foreground">
             {designs.length} design{designs.length !== 1 ? 's' : ''} available
           </p>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>

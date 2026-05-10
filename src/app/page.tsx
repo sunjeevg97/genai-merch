@@ -31,8 +31,8 @@ export default function LandingPage() {
 
   useEffect(() => {
     if (isLoaded && userId) {
-      // Redirect authenticated users to design wizard
-      router.push('/design/create');
+      // Redirect authenticated users to dashboard
+      router.push('/dashboard');
     }
   }, [isLoaded, userId, router]);
 
@@ -41,8 +41,8 @@ export default function LandingPage() {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
-          <div className="mb-4 inline-block h-12 w-12 animate-spin rounded-full border-4 border-gray-300 border-t-primary"></div>
-          <p className="text-gray-600">Loading...</p>
+          <div className="mb-4 inline-block h-12 w-12 animate-spin rounded-full border-4 border-muted border-t-primary"></div>
+          <p className="text-muted-foreground">Loading...</p>
         </div>
       </div>
     );

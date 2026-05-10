@@ -110,14 +110,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get Supabase user for database operations
-    const user = await getSupabaseUser(clerkUserId);
-    if (!user) {
+    // Get Supabase user for database operations (auto-creates if needed)
+    console.log('[Design Save] Looking up user for clerkId:', clerkUserId);
+    let user;
+    try {
+      user = await getSupabaseUser(clerkUserId);
+    } catch (syncError) {
+      console.error('[Design Save] User sync error:', syncError);
       return NextResponse.json(
-        { error: 'User not found in database' },
+        {
+          error: 'User sync failed',
+          message: syncError instanceof Error ? syncError.message : 'Unable to sync user account',
+        },
+        { status: 500 }
+      );
+    }
+
+    if (!user) {
+      console.error('[Design Save] Failed to get or create user for clerkId:', clerkUserId);
+      return NextResponse.json(
+        {
+          error: 'User not found',
+          message: 'Unable to find or create user account. Please try signing out and back in.',
+        },
         { status: 404 }
       );
     }
+    console.log('[Design Save] Found user:', user.id, user.email);
 
     // 2. Parse and validate request body
     const body = await request.json();

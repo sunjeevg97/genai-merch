@@ -14,7 +14,6 @@ import Link from 'next/link';
 import { ArrowLeft, Package, Eye, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { VariantSelector } from '@/components/products/variant-selector';
@@ -36,32 +35,6 @@ interface ProductDetailPageProps {
   params: Promise<{
     productId: string;
   }>;
-}
-
-/**
- * Format product type for display
- */
-function formatProductType(type: string): string {
-  return type
-    .split('-')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
-}
-
-/**
- * Get category badge color (dark theme compatible)
- */
-function getCategoryColor(category: string): string {
-  switch (category) {
-    case 'apparel':
-      return 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20';
-    case 'accessories':
-      return 'bg-purple-500/10 text-purple-400 hover:bg-purple-500/20';
-    case 'home-living':
-      return 'bg-green-500/10 text-green-400 hover:bg-green-500/20';
-    default:
-      return 'bg-muted text-muted-foreground hover:bg-muted/80';
-  }
 }
 
 /**
@@ -175,6 +148,50 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
     return () => observer.disconnect();
   }, []);
 
+  // Build gallery images from variant colors and product image
+  // NOTE: Must be before early returns to satisfy Rules of Hooks
+  const galleryImages = useMemo(() => {
+    if (!product) return [];
+
+    const images: { src: string; alt: string; type: 'product' | 'variant'; color?: string }[] = [];
+
+    // Add main product image
+    if (isValidImageUrl(product.imageUrl)) {
+      images.push({ src: product.imageUrl, alt: product.name, type: 'product' });
+    }
+
+    // Add unique variant images (different colors) with color tracking
+    if (product.variants) {
+      const seenUrls = new Set([product.imageUrl]);
+      product.variants.forEach((variant: ProductVariant) => {
+        if (isValidImageUrl(variant.imageUrl) && !seenUrls.has(variant.imageUrl)) {
+          seenUrls.add(variant.imageUrl!);
+          images.push({
+            src: variant.imageUrl!,
+            alt: `${product.name} - ${variant.color || variant.name}`,
+            type: 'variant',
+            color: variant.color || undefined,
+          });
+        }
+      });
+    }
+
+    return images.slice(0, 6); // Max 6 thumbnails
+  }, [product]);
+
+  // Sync variant color selection → gallery image
+  // When user selects a color, automatically show the matching product image
+  useEffect(() => {
+    if (selectedVariant?.imageUrl && galleryImages.length > 0) {
+      const matchingIndex = galleryImages.findIndex(
+        (img) => img.src === selectedVariant.imageUrl
+      );
+      if (matchingIndex !== -1 && matchingIndex !== selectedImageIndex) {
+        setSelectedImageIndex(matchingIndex);
+      }
+    }
+  }, [selectedVariant?.imageUrl, galleryImages, selectedImageIndex]);
+
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -198,33 +215,6 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
   const displayImage = (isValidImageUrl(variantImage) ? variantImage : null) ||
                        (isValidImageUrl(productImage) ? productImage : null);
 
-  // Build gallery images from variant colors and product image
-  const galleryImages = (() => {
-    const images: { src: string; alt: string; type: 'product' | 'variant' }[] = [];
-
-    // Add main product image
-    if (isValidImageUrl(product.imageUrl)) {
-      images.push({ src: product.imageUrl, alt: product.name, type: 'product' });
-    }
-
-    // Add unique variant images (different colors)
-    if (product.variants) {
-      const seenUrls = new Set([product.imageUrl]);
-      product.variants.forEach((variant: ProductVariant) => {
-        if (isValidImageUrl(variant.imageUrl) && !seenUrls.has(variant.imageUrl)) {
-          seenUrls.add(variant.imageUrl!);
-          images.push({
-            src: variant.imageUrl!,
-            alt: `${product.name} - ${variant.color || variant.name}`,
-            type: 'variant',
-          });
-        }
-      });
-    }
-
-    return images.slice(0, 6); // Max 6 thumbnails
-  })();
-
   // Get current display image
   const currentImage = galleryImages[selectedImageIndex]?.src || displayImage;
 
@@ -246,11 +236,6 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
           <div className="order-2 lg:order-1 space-y-8">
             {/* Product Info */}
             <div>
-              {/* Category Badge */}
-              <Badge className={cn('mb-3', getCategoryColor(product.category))}>
-                {formatProductType(product.productType)}
-              </Badge>
-
               <h1 className="text-3xl font-bold tracking-tight text-foreground lg:text-4xl">
                 {product.name}
               </h1>
@@ -433,7 +418,14 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
                     {galleryImages.map((img, index) => (
                       <button
                         key={index}
-                        onClick={() => setSelectedImageIndex(index)}
+                        onClick={() => {
+                          setSelectedImageIndex(index);
+                          // Sync gallery image → color selection
+                          // When clicking a variant image, update the color selector
+                          if (img.type === 'variant' && img.color && img.color !== selectedColor) {
+                            setSelectedColor(img.color);
+                          }
+                        }}
                         className={cn(
                           'relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg ring-2 transition-all',
                           selectedImageIndex === index

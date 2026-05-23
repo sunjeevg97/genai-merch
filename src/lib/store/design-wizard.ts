@@ -2,10 +2,9 @@
  * Design Wizard Store
  *
  * Zustand store for managing the AI-first design wizard state.
- * This store orchestrates the 3-step design creation flow:
- * 1. Event Type Selection
- * 2. Event Details
- * 3. AI Chat Interface (Design Generation)
+ * This store orchestrates the 2-step design creation flow:
+ * 1. Project Info (Event Type + Details combined)
+ * 2. AI Chat Interface (Design Generation)
  *
  * After design selection, users are directed to /products to browse
  * and add items to cart. The wizard supports a return-to-product flow
@@ -75,35 +74,16 @@ export interface EventDetails {
  * Brand Assets
  *
  * Optional brand materials provided by the user to inform AI design generation.
- * These assets help maintain brand consistency and identity.
+ * Simplified to only include colors, which are actually used in prompt generation.
+ * (Logos, fonts, and voice were previously collected but never used in image generation)
  */
 export interface BrandAssets {
-  /**
-   * Uploaded logo URLs (from Supabase Storage)
-   * Array to support multiple logo variations (primary, secondary, etc.)
-   */
-  logos: string[];
-
   /**
    * Brand colors in hex format
    * Used to maintain brand color consistency in generated designs
    * @example ['#FF5733', '#3498DB', '#2ECC71']
    */
   colors: string[];
-
-  /**
-   * Brand fonts
-   * Font names or Google Fonts URLs to use in designs
-   * @example ['Roboto', 'Open Sans', 'Montserrat']
-   */
-  fonts: string[];
-
-  /**
-   * Brand voice/tone
-   * Description of brand personality to guide AI text generation
-   * @example 'Professional and authoritative' or 'Fun and playful'
-   */
-  voice: string;
 }
 
 /**
@@ -202,14 +182,13 @@ export interface DesignFeedback {
 /**
  * Wizard Steps
  *
- * Enumeration of the three steps in the streamlined design wizard flow.
+ * Enumeration of the two steps in the streamlined design wizard flow.
  * After completing the wizard, users are directed to /products to browse
  * and apply their design to products.
  */
 export enum WizardStep {
-  EventType = 1,      // Step 1: Select event type/purpose
-  EventDetails = 2,   // Step 2: Provide event details
-  AiChat = 3,         // Step 3: AI chat interface for design generation
+  ProjectInfo = 1,    // Step 1: Select event type and provide details (combined)
+  AiChat = 2,         // Step 2: AI chat interface for design generation
 }
 
 /**
@@ -225,7 +204,7 @@ export interface DesignWizardState {
 
   /**
    * Current active step in the wizard
-   * 1 = Event Type, 2 = Event Details, 3 = AI Chat
+   * 1 = Project Info (Event Type + Details), 2 = AI Chat
    */
   currentStep: WizardStep;
 
@@ -244,7 +223,7 @@ export interface DesignWizardState {
   returnToProductId: string | null;
 
   // ============================================================================
-  // Step 1: Event Type Selection
+  // Step 1: Project Info (Event Type + Details combined)
   // ============================================================================
 
   /**
@@ -254,10 +233,6 @@ export interface DesignWizardState {
    */
   eventType: EventType | null;
 
-  // ============================================================================
-  // Step 2: Event Details
-  // ============================================================================
-
   /**
    * Event-specific details gathered from user
    * Dynamic based on selected event type
@@ -266,13 +241,12 @@ export interface DesignWizardState {
   eventDetails: EventDetails;
 
   // ============================================================================
-  // Step 3: AI Chat & Design Generation
+  // Step 2: AI Chat & Design Generation
   // ============================================================================
 
   /**
-   * User's brand assets for design consistency (optional - collapsible in Step 3)
-   * All fields are optional
-   * @default { logos: [], colors: [], fonts: [], voice: '' }
+   * User's brand colors for design consistency (optional - collapsible in Step 2)
+   * @default { colors: [] }
    */
   brandAssets: BrandAssets;
 
@@ -301,8 +275,31 @@ export interface DesignWizardState {
    * Design variety level chosen by user
    * Determines whether to generate variations or different concepts
    * @default null
+   * @deprecated Phase 2 introduces `varietyMode` with cleaner semantics.
+   *   Kept for one release so older persisted sessions don't break; the
+   *   batch route still reads this for backward compatibility.
    */
   designVarietyLevel: 'variations' | 'different-concepts' | null;
+
+  /**
+   * Chosen style preset id (from src/lib/ai/style-presets.ts).
+   * Drives the STYLE: and PALETTE: sections of the assembled prompt.
+   * @default null
+   */
+  selectedPresetId: string | null;
+
+  /**
+   * Variety strategy for batch generation.
+   * - 'same-preset': all variants use the selected preset (different seeds)
+   * - 'mix-presets': each variant uses a different preset (one of the
+   *   3-4 event-mapped defaults + wildcard fallback)
+   *
+   * Phase 2 maps these to the legacy varietyLevel at API call time
+   * ('same-preset' → 'variations', 'mix-presets' → 'different-concepts').
+   * Phase 3 rewrites the batch route to read varietyMode directly.
+   * @default 'same-preset'
+   */
+  varietyMode: 'same-preset' | 'mix-presets';
 
   /**
    * User feedback on generated designs
@@ -389,7 +386,7 @@ export interface DesignWizardState {
 
   /**
    * Jump to a specific step in the wizard
-   * @param step - The step number to navigate to (1-3)
+   * @param step - The step number to navigate to (1-2)
    */
   goToStep: (step: WizardStep) => void;
 
@@ -413,7 +410,7 @@ export interface DesignWizardState {
   completeDesignWizard: () => void;
 
   // ============================================================================
-  // Step 1 Actions: Event Type
+  // Step 1 Actions: Project Info (Event Type + Details)
   // ============================================================================
 
   /**
@@ -421,10 +418,6 @@ export interface DesignWizardState {
    * @param eventType - The selected event type
    */
   setEventType: (eventType: EventType) => void;
-
-  // ============================================================================
-  // Step 2 Actions: Event Details
-  // ============================================================================
 
   /**
    * Set all event details at once
@@ -440,7 +433,7 @@ export interface DesignWizardState {
   updateEventDetail: <K extends keyof EventDetails>(field: K, value: EventDetails[K]) => void;
 
   // ============================================================================
-  // Step 3 Actions: Brand Assets (Optional in AI Chat)
+  // Step 2 Actions: Brand Colors (Optional in AI Chat)
   // ============================================================================
 
   /**
@@ -448,18 +441,6 @@ export interface DesignWizardState {
    * @param assets - Complete brand assets object
    */
   setBrandAssets: (assets: BrandAssets) => void;
-
-  /**
-   * Add a logo URL to brand assets
-   * @param logoUrl - Public URL of uploaded logo
-   */
-  addLogo: (logoUrl: string) => void;
-
-  /**
-   * Remove a logo from brand assets
-   * @param logoUrl - Logo URL to remove
-   */
-  removeLogo: (logoUrl: string) => void;
 
   /**
    * Add a color to brand assets
@@ -479,20 +460,8 @@ export interface DesignWizardState {
    */
   setColors: (colors: string[]) => void;
 
-  /**
-   * Set brand fonts
-   * @param fonts - Array of font names
-   */
-  setFonts: (fonts: string[]) => void;
-
-  /**
-   * Set brand voice/tone
-   * @param voice - Brand voice description
-   */
-  setVoice: (voice: string) => void;
-
   // ============================================================================
-  // Step 3 Actions: Interactive Question Flow
+  // Step 2 Actions: Interactive Question Flow
   // ============================================================================
 
   /**
@@ -516,8 +485,22 @@ export interface DesignWizardState {
   /**
    * Set the design variety level
    * @param level - Variety level choice
+   * @deprecated Use setVarietyMode instead. See varietyMode docstring.
    */
   setDesignVarietyLevel: (level: 'variations' | 'different-concepts') => void;
+
+  /**
+   * Set the chosen style preset id.
+   * @param presetId - StylePreset.id or null to clear
+   */
+  setSelectedPresetId: (presetId: string | null) => void;
+
+  /**
+   * Set the variety strategy for batch generation.
+   * @param mode - 'same-preset' (4 variants of one preset) or
+   *   'mix-presets' (1 variant of each of 4 different presets)
+   */
+  setVarietyMode: (mode: 'same-preset' | 'mix-presets') => void;
 
   /**
    * Set design feedback for iteration
@@ -532,7 +515,7 @@ export interface DesignWizardState {
   resetQuestionFlow: () => void;
 
   // ============================================================================
-  // Step 3 Actions: AI Design Generation
+  // Step 2 Actions: AI Design Generation
   // ============================================================================
 
   /**
@@ -629,21 +612,20 @@ export interface DesignWizardState {
  * Used when creating a new design or resetting the wizard.
  */
 const initialState = {
-  currentStep: WizardStep.EventType,
+  currentStep: WizardStep.ProjectInfo,
   isComplete: false,
   returnToProductId: null,
   eventType: null,
   eventDetails: {},
   brandAssets: {
-    logos: [],
     colors: [],
-    fonts: [],
-    voice: '',
   },
   questionAnswers: [],
   currentQuestionIndex: 0,
   totalQuestions: 0,
   designVarietyLevel: null,
+  selectedPresetId: null,
+  varietyMode: 'same-preset' as const,
   designFeedback: null,
   generatedDesigns: [],
   selectedDesignId: null,
@@ -704,7 +686,7 @@ export const useDesignWizard = create<DesignWizardState>()(
 
         previousStep: () => {
           const { currentStep } = get();
-          if (currentStep > WizardStep.EventType) {
+          if (currentStep > WizardStep.ProjectInfo) {
             set({ currentStep: currentStep - 1 });
           }
         },
@@ -726,19 +708,16 @@ export const useDesignWizard = create<DesignWizardState>()(
 
           set({
             // Reset navigation
-            currentStep: WizardStep.EventType,
+            currentStep: WizardStep.ProjectInfo,
             isComplete: false,
 
             // Clear event selection
             eventType: null,
             eventDetails: {},
 
-            // Clear brand assets
+            // Clear brand colors
             brandAssets: {
-              logos: [],
               colors: [],
-              fonts: [],
-              voice: '',
             },
 
             // Clear questions & answers
@@ -748,6 +727,8 @@ export const useDesignWizard = create<DesignWizardState>()(
 
             // Clear design variety and feedback
             designVarietyLevel: null,
+            selectedPresetId: null,
+            varietyMode: 'same-preset' as const,
             designFeedback: null,
 
             // Clear AI designs
@@ -797,7 +778,7 @@ export const useDesignWizard = create<DesignWizardState>()(
         },
 
         // ========================================================================
-        // Step 1 Actions: Event Type
+        // Step 1 Actions: Project Info (Event Type + Details)
         // ========================================================================
 
         setEventType: (eventType: EventType) => {
@@ -815,10 +796,6 @@ export const useDesignWizard = create<DesignWizardState>()(
           }
         },
 
-        // ========================================================================
-        // Step 2 Actions: Event Details
-        // ========================================================================
-
         setEventDetails: (details: EventDetails) => {
           set({ eventDetails: details });
         },
@@ -834,31 +811,11 @@ export const useDesignWizard = create<DesignWizardState>()(
         },
 
         // ========================================================================
-        // Step 3 Actions: Brand Assets (Optional in AI Chat)
+        // Step 2 Actions: Brand Colors (Optional in AI Chat)
         // ========================================================================
 
         setBrandAssets: (assets: BrandAssets) => {
           set({ brandAssets: assets });
-        },
-
-        addLogo: (logoUrl: string) => {
-          const { brandAssets } = get();
-          set({
-            brandAssets: {
-              ...brandAssets,
-              logos: [...brandAssets.logos, logoUrl],
-            },
-          });
-        },
-
-        removeLogo: (logoUrl: string) => {
-          const { brandAssets } = get();
-          set({
-            brandAssets: {
-              ...brandAssets,
-              logos: brandAssets.logos.filter(url => url !== logoUrl),
-            },
-          });
         },
 
         addColor: (color: string) => {
@@ -893,28 +850,8 @@ export const useDesignWizard = create<DesignWizardState>()(
           });
         },
 
-        setFonts: (fonts: string[]) => {
-          const { brandAssets } = get();
-          set({
-            brandAssets: {
-              ...brandAssets,
-              fonts,
-            },
-          });
-        },
-
-        setVoice: (voice: string) => {
-          const { brandAssets } = get();
-          set({
-            brandAssets: {
-              ...brandAssets,
-              voice,
-            },
-          });
-        },
-
         // ========================================================================
-        // Step 3 Actions: Interactive Question Flow
+        // Step 2 Actions: Interactive Question Flow
         // ========================================================================
 
         addQuestionAnswer: (answer: QuestionAnswer) => {
@@ -936,6 +873,14 @@ export const useDesignWizard = create<DesignWizardState>()(
           set({ designVarietyLevel: level });
         },
 
+        setSelectedPresetId: (presetId: string | null) => {
+          set({ selectedPresetId: presetId });
+        },
+
+        setVarietyMode: (mode: 'same-preset' | 'mix-presets') => {
+          set({ varietyMode: mode });
+        },
+
         setDesignFeedback: (feedback: DesignFeedback) => {
           set({ designFeedback: feedback });
         },
@@ -946,12 +891,14 @@ export const useDesignWizard = create<DesignWizardState>()(
             currentQuestionIndex: 0,
             totalQuestions: 0,
             designVarietyLevel: null,
+            selectedPresetId: null,
+            varietyMode: 'same-preset' as const,
             designFeedback: null,
           });
         },
 
         // ========================================================================
-        // Step 3 Actions: AI Design Generation
+        // Step 2 Actions: AI Design Generation
         // ========================================================================
 
         addGeneratedDesign: (design: GeneratedDesign) => {
@@ -1041,6 +988,38 @@ export const useDesignWizard = create<DesignWizardState>()(
       }),
       {
         name: 'design-wizard-storage', // localStorage key
+        version: 3, // v3: adds selectedPresetId + varietyMode (style preset overhaul)
+        // Migrate old state across all prior versions
+        migrate: (persistedState: unknown, version: number) => {
+          console.log('[DesignWizard] Migrating from version:', version);
+          const state = persistedState as Record<string, unknown>;
+
+          // v0/v1 → v2: 5-step wizard → 2-step wizard
+          if (version === 0 || version === 1) {
+            const oldStep = state.currentStep as number;
+            if (typeof oldStep === 'number' && oldStep > WizardStep.AiChat) {
+              console.log('[DesignWizard] Resetting invalid currentStep:', oldStep, '-> 1');
+              state.currentStep = WizardStep.ProjectInfo;
+            }
+
+            // Clean up old brandAssets fields (logos, fonts, voice)
+            if (state.brandAssets && typeof state.brandAssets === 'object') {
+              const brandAssets = state.brandAssets as Record<string, unknown>;
+              state.brandAssets = {
+                colors: Array.isArray(brandAssets.colors) ? brandAssets.colors : [],
+              };
+            }
+          }
+
+          // v0/v1/v2 → v3: seed style preset fields with defaults so older
+          // sessions don't fail validation when the picker UI reads them.
+          if (version < 3) {
+            state.selectedPresetId = null;
+            state.varietyMode = 'same-preset';
+          }
+
+          return state;
+        },
         // Custom storage with error handling for quota exceeded errors
         storage: {
           getItem: (name) => {
@@ -1116,6 +1095,8 @@ export const useDesignWizard = create<DesignWizardState>()(
             currentQuestionIndex: state.currentQuestionIndex,
             totalQuestions: state.totalQuestions,
             designVarietyLevel: state.designVarietyLevel,
+            selectedPresetId: state.selectedPresetId,
+            varietyMode: state.varietyMode,
             designFeedback: state.designFeedback,
             // Only persist designs with HTTP URLs (not base64 data URLs)
             generatedDesigns: persistableDesigns,
@@ -1127,7 +1108,7 @@ export const useDesignWizard = create<DesignWizardState>()(
             preparationError: state.preparationError,
             recommendedProducts: state.recommendedProducts,
             selectedProducts: state.selectedProducts,
-          } as DesignWizardState;
+          } as Record<string, unknown>;
         },
       }
     ),

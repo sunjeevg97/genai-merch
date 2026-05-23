@@ -81,55 +81,93 @@ function getReplicateClient() {
 }
 
 /**
+ * Sleep utility for retry delays
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
  * Function 1: Upscale Design
  *
  * Uses Replicate's Real-ESRGAN model to upscale images 4x.
  * Input: 1024x1024 → Output: 4096x4096
  *
+ * Includes retry logic with exponential backoff for rate limit handling.
+ *
  * @param designUrl - URL or data URL of the design to upscale
+ * @param maxRetries - Maximum number of retry attempts (default: 3)
  * @returns Promise<string> - Data URL of upscaled image
  */
-export async function upscaleDesign(designUrl: string): Promise<string> {
+export async function upscaleDesign(designUrl: string, maxRetries: number = 3): Promise<string> {
   console.log('[Upscale] Starting upscaling with Real-ESRGAN...');
 
   const replicate = getReplicateClient();
+  let lastError: Error | null = null;
 
-  try {
-    // Run Real-ESRGAN model
-    const output = await replicate.run(
-      'nightmareai/real-esrgan:42fed1c4974146d4d2414e2be2c5277c7fcf05fcc3a73abf41610695738c1d7b',
-      {
-        input: {
-          image: designUrl,
-          scale: 4, // 4x upscaling
-          face_enhance: false, // Not needed for merchandise designs
-        },
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      // Run Real-ESRGAN model
+      const output = await replicate.run(
+        'nightmareai/real-esrgan:42fed1c4974146d4d2414e2be2c5277c7fcf05fcc3a73abf41610695738c1d7b',
+        {
+          input: {
+            image: designUrl,
+            scale: 4, // 4x upscaling
+            face_enhance: false, // Not needed for merchandise designs
+          },
+        }
+      );
+
+      // Output is a URL to the upscaled image
+      // Cast through unknown first - Replicate's run() returns loosely-typed data
+      const upscaledUrl = output as unknown as string;
+
+      if (!upscaledUrl) {
+        throw new Error('No output from Real-ESRGAN');
       }
-    );
 
-    // Output is a URL to the upscaled image
-    // Cast through unknown first - Replicate's run() returns loosely-typed data
-    const upscaledUrl = output as unknown as string;
+      console.log('[Upscale] Successfully upscaled image');
 
-    if (!upscaledUrl) {
-      throw new Error('No output from Real-ESRGAN');
+      // Fetch the upscaled image and convert to data URL
+      const response = await fetch(upscaledUrl);
+      const buffer = await response.arrayBuffer();
+      const base64 = Buffer.from(buffer).toString('base64');
+      const dataUrl = `data:image/png;base64,${base64}`;
+
+      return dataUrl;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      const errorMessage = lastError.message.toLowerCase();
+
+      // Check if this is a rate limit error (429)
+      const isRateLimit = errorMessage.includes('429') ||
+                          errorMessage.includes('rate limit') ||
+                          errorMessage.includes('throttled');
+
+      if (isRateLimit && attempt < maxRetries) {
+        // Extract retry_after from error message if available, otherwise use exponential backoff
+        const retryAfterMatch = errorMessage.match(/retry.?after[:\s]*~?(\d+)/i);
+        const baseDelay = retryAfterMatch ? parseInt(retryAfterMatch[1], 10) * 1000 : 10000;
+        const delay = baseDelay * Math.pow(1.5, attempt - 1); // Exponential backoff
+
+        console.log(
+          `[Upscale] Rate limited (attempt ${attempt}/${maxRetries}). ` +
+          `Waiting ${Math.round(delay / 1000)}s before retry...`
+        );
+        await sleep(delay);
+        continue;
+      }
+
+      // Not a rate limit error or max retries reached
+      console.error('[Upscale] Error:', error);
+      break;
     }
-
-    console.log('[Upscale] Successfully upscaled image');
-
-    // Fetch the upscaled image and convert to data URL
-    const response = await fetch(upscaledUrl);
-    const buffer = await response.arrayBuffer();
-    const base64 = Buffer.from(buffer).toString('base64');
-    const dataUrl = `data:image/png;base64,${base64}`;
-
-    return dataUrl;
-  } catch (error) {
-    console.error('[Upscale] Error:', error);
-    throw new Error(
-      `Failed to upscale design: ${error instanceof Error ? error.message : 'Unknown error'}`
-    );
   }
+
+  throw new Error(
+    `Failed to upscale design after ${maxRetries} attempts: ${lastError?.message || 'Unknown error'}`
+  );
 }
 
 /**

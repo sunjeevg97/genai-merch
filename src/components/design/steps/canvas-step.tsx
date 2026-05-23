@@ -84,10 +84,9 @@ export function CanvasStep() {
   const [isLoadingDesign, setIsLoadingDesign] = useState(false);
   const [loadError, setLoadError] = useState<AppError | null>(null);
 
-  // Memoize first brand logo to prevent re-render issues
-  const firstBrandLogo = useMemo(() => {
-    return brandAssets.logos[0] || null;
-  }, [brandAssets.logos[0]]);
+  // Note: Brand logos are no longer stored in brandAssets (simplified to colors only)
+  // AI-generated designs from step 4 (finalDesignUrl) are used instead
+  const firstBrandLogo = null;
 
   // Debug: Log Zustand store values on mount and when they change
   useEffect(() => {

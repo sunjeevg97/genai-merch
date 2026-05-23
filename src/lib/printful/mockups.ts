@@ -99,6 +99,14 @@ export interface MockupPosition {
 }
 
 /**
+ * Product options for mockup generation (e.g., stitch_color for embroidery)
+ */
+export interface MockupProductOption {
+  option_type: 'stitch_color' | 'thread_colors' | string;
+  option_value: string;
+}
+
+/**
  * Mockup request structure for Printful API v2
  */
 export interface MockupRequest {
@@ -108,6 +116,7 @@ export interface MockupRequest {
     catalog_product_id: number;
     catalog_variant_ids: number[];
     style_id?: number; // Optional mockup style (flat lay, model, hanger, etc.)
+    options?: MockupProductOption[]; // Required for embroidery (stitch_color)
     placements: Array<{
       placement: string;
       technique: PrintTechnique; // Use the expanded PrintTechnique type
@@ -449,7 +458,21 @@ export async function generateMockup(
   // IMPORTANT: Placements array is ALWAYS required
   // When using style_id, the style determines the mockup template (flat lay, model, etc.)
   // but we still specify where to place the design
-  // NOTE: We don't pass thread_colors for embroidery - it converts the design to monochrome
+  // NOTE: Embroidery requires stitch_color option - we use white ("0010") as default
+  // since it contrasts well with most product colors and is widely available
+
+  // Build product options based on technique
+  const productOptions: MockupProductOption[] = [];
+
+  // Embroidery requires stitch_color - use white as default for best visibility
+  if (selectedTechnique === 'embroidery') {
+    productOptions.push({
+      option_type: 'stitch_color',
+      option_value: '0010', // White thread - visible on most products
+    });
+    console.log('[Mockup] Adding embroidery stitch_color option: 0010 (white)');
+  }
+
   const request: MockupRequest = {
     format: 'jpg',
     products: [
@@ -458,6 +481,7 @@ export async function generateMockup(
         catalog_product_id: printfulProductId,
         catalog_variant_ids: [printfulVariantId],
         ...(styleId && { style_id: styleId }),
+        ...(productOptions.length > 0 && { options: productOptions }),
         placements: [
           {
             placement: mappedPlacement,

@@ -564,6 +564,39 @@ export function MockupPreview({
   }, [productVariantId, selectedTechnique, designUrl, product?.id, printfulProductId, availableTechniques]);
 
   /**
+   * Auto-generate mockups when all conditions are met and no cached mockups exist
+   * This creates a seamless flow where mockups appear automatically
+   */
+  useEffect(() => {
+    // Don't auto-generate if any required data is missing
+    if (
+      !designUrl ||
+      !productVariantId ||
+      !selectedTechnique ||
+      availableTechniques.length === 0
+    ) {
+      return;
+    }
+
+    // Don't auto-generate if we already have mockups or are currently generating
+    if (generatedMockups.length > 0 || batchGenerating) {
+      return;
+    }
+
+    // Small delay to allow cache loading effect to complete first
+    // This prevents race conditions between cache check and auto-generation
+    const timer = setTimeout(() => {
+      // Double-check conditions haven't changed during delay
+      if (generatedMockups.length === 0 && !batchGenerating) {
+        console.log('[Mockup Preview] Auto-generating mockups...');
+        handleBatchGeneration();
+      }
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [designUrl, productVariantId, selectedTechnique, generatedMockups.length, batchGenerating, availableTechniques.length]);
+
+  /**
    * Handle mockup grid item click - open modal for viewing and adding to cart
    */
   const handleMockupClick = (mockup: typeof generatedMockups[0]) => {
@@ -738,18 +771,15 @@ export function MockupPreview({
           )}
         </div>
 
-        {/* Batch Generation Button (shown before generation starts) */}
+        {/* Auto-generation message (shown briefly before generation starts) */}
         {!batchGenerating && generatedMockups.length === 0 && (
           <Card className="border-blue-200 bg-blue-50">
-            <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-              <Layers className="mb-4 h-12 w-12 text-blue-500" />
-              <h3 className="mb-2 font-semibold text-blue-900">Ready to Generate Mockups</h3>
-              <p className="mb-6 text-sm text-blue-700">
-                Click below to generate mockups for all available styles and placements using {availableTechniques.find(t => t.value === selectedTechnique)?.label}.
+            <CardContent className="flex flex-col items-center justify-center py-8 text-center">
+              <Loader2 className="mb-3 h-8 w-8 animate-spin text-blue-500" />
+              <h3 className="mb-1 font-semibold text-blue-900">Preparing Mockups</h3>
+              <p className="text-sm text-blue-700">
+                Generating previews with {availableTechniques.find(t => t.value === selectedTechnique)?.label}...
               </p>
-              <Button onClick={handleBatchGeneration} size="lg">
-                Generate Images
-              </Button>
             </CardContent>
           </Card>
         )}

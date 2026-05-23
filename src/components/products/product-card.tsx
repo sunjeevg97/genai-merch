@@ -10,37 +10,10 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Package } from 'lucide-react';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import type { ProductWithVariants } from '@/lib/products/queries';
 
 interface ProductCardProps {
   product: ProductWithVariants;
-}
-
-/**
- * Format product type for display
- */
-function formatProductType(type: string): string {
-  return type
-    .split('-')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
-}
-
-/**
- * Get category badge color
- */
-function getCategoryColor(category: string): string {
-  switch (category) {
-    case 'apparel':
-      return 'bg-primary/10 text-primary hover:bg-primary/10';
-    case 'accessories':
-      return 'bg-accent/10 text-accent hover:bg-accent/10';
-    case 'home-living':
-      return 'bg-success/10 text-success hover:bg-success/10';
-    default:
-      return 'bg-muted text-foreground hover:bg-muted';
-  }
 }
 
 export function ProductCard({ product }: ProductCardProps) {
@@ -89,13 +62,6 @@ export function ProductCard({ product }: ProductCardProps) {
                 <span className="text-xs">No image available</span>
               </div>
             )}
-
-            {/* Category Badge */}
-            <div className="absolute left-2 top-2">
-              <Badge className={getCategoryColor(product.category)}>
-                {formatProductType(product.productType)}
-              </Badge>
-            </div>
           </div>
         </CardHeader>
 

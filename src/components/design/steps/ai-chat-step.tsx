@@ -71,14 +71,6 @@ export function AiChatStep() {
       context.push(`Brand colors: ${brandAssets.colors.join(', ')}`);
     }
 
-    if (brandAssets.fonts.length > 0) {
-      context.push(`Brand fonts: ${brandAssets.fonts.join(', ')}`);
-    }
-
-    if (brandAssets.voice) {
-      context.push(`Brand voice: ${brandAssets.voice}`);
-    }
-
     return context.join('\n');
   };
 

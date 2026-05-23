@@ -83,9 +83,6 @@ const chatRequestSchema = z.object({
   brandAssets: z
     .object({
       colors: z.array(z.string()).optional().default([]),
-      fonts: z.array(z.string()).optional().default([]),
-      voice: z.string().optional().default(''),
-      logos: z.array(z.string()).optional().default([]),
     })
     .optional(),
 });
@@ -178,9 +175,6 @@ export async function POST(request: NextRequest) {
       brandAssets: brandAssets
         ? {
             colors: brandAssets.colors || [],
-            fonts: brandAssets.fonts || [],
-            voice: brandAssets.voice || '',
-            logos: brandAssets.logos || [],
           }
         : undefined,
     };

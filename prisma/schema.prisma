@@ -63,10 +63,27 @@ model Design {
   printReadyUrl      String? // Print-ready file URL (optimized, upscaled, 300 DPI)
   printReadyMetadata Json? // Print preparation metadata (dimensions, upscaling, DPI, etc.)
   preparedAt         DateTime? // When design was prepared for print
+
+  // Style preset overhaul (Phase 3): preset id + generation seed are now
+  // first-class columns instead of metadata JSON, enabling efficient
+  // analytics queries like "conversion-to-purchase by presetId".
+  presetId           String? // StylePreset.id from src/lib/ai/style-presets.ts
+  seed               String? // Generation seed (for variant correlation + reproducibility)
+
+  // Variant grouping: when the batch route generates 4 designs, all 4 are
+  // persisted as sibling rows sharing variantGroupId, with variantIndex 0-3.
+  // The user-selected variant gets added to cart; unselected siblings stay
+  // for analytics (which compositions did users reject within a style?).
+  variantGroupId     String? // Shared ID across siblings from one generation request
+  variantIndex       Int?    // Position within the group (0-3)
+
   createdAt          DateTime    @default(now())
   updatedAt          DateTime    @updatedAt
   cartItems          CartItem[]
   orderItems         OrderItem[]
+
+  @@index([presetId])
+  @@index([variantGroupId])
 }
 
 // E-commerce Product Catalog (synced from Printful)

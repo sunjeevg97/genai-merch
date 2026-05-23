@@ -1,39 +1,36 @@
 /**
- * Interactive Question Flow Step (New Chat Step)
+ * Design Generation Step (Step 2 of wizard)
  *
- * Replaces the old chat interface with a guided question flow.
- * Implements a state machine that orchestrates:
- * 1. Fixed questions (3 per event type)
- * 2. AI-generated follow-up questions (0-2, enforced 5 question max)
- * 3. Design variety selection
- * 4. Batch design generation (3 designs)
- * 5. Design results gallery
- * 6. Optional feedback and iteration
+ * Streamlined state machine:
+ * 1. Style preset selection (gate before generation)
+ * 2. Variety mode toggle (same-preset vs mix-presets) + generate confirmation
+ * 3. Batch design generation (4 designs)
+ * 4. Design results gallery
+ * 5. Optional feedback and iteration
+ *
+ * Both AI follow-up questions and the fixed-question questionnaire were
+ * removed and their files deleted: preset choice + event details from
+ * Step 1 supply enough design signal on their own.
  */
 
 'use client';
 
-import { useState, useEffect } from 'react';
-import { AnimatePresence } from 'framer-motion';
+import { useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useDesignWizard } from '@/lib/store/design-wizard';
-import { getFixedQuestions } from '@/lib/ai/question-templates';
-import { QuestionContainer } from '@/components/design/questions/question-container';
-import { YesNoQuestion } from '@/components/design/questions/yes-no-question';
-import { StyleQuestion } from '@/components/design/questions/style-question';
-import { MultiSelectQuestion } from '@/components/design/questions/multi-select-question';
-import { ColorQuestion } from '@/components/design/questions/color-question';
-import { DesignVarietySelector } from '@/components/design/design-variety-selector';
 import { DesignResults } from '@/components/design/design-results';
 import { DesignFeedbackComponent } from '@/components/design/design-feedback';
 import { GeneratingDesignsLoader } from '@/components/design/loading/generating-designs-loader';
-import { AIFollowupLoader } from '@/components/design/loading/ai-followup-loader';
 import { ErrorAlert } from '@/components/design/error-alert';
 import { WizardCompletionStep } from '@/components/design/steps/wizard-completion-step';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Info, RefreshCw } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Info, RefreshCw, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
-import type { DesignQuestion } from '@/lib/ai/question-templates';
+import { getPreset } from '@/lib/ai/style-presets';
 
 /**
  * Flow States
@@ -41,17 +38,18 @@ import type { DesignQuestion } from '@/lib/ai/question-templates';
  * State machine for the question flow progression.
  */
 type FlowState =
-  | 'questions' // Asking fixed + AI questions
-  | 'ai-followup' // Loading AI-generated questions
-  | 'variety-selection' // Choosing variety level
-  | 'generating' // Generating 3 designs
-  | 'results' // Showing 3 designs
+  | 'variety-selection' // Choosing variety mode + final generate (preset picked upstream in BriefComposerStep)
+  | 'generating' // Generating 4 designs
+  | 'results' // Showing 4 designs
   | 'feedback' // Collecting feedback
   | 'regenerating' // Regenerating with feedback
   | 'completion'; // Wizard complete, show CTAs
 
 /**
  * Generated Design Interface
+ *
+ * Phase 3: presetId + seed live in metadata as emitted by the batch route.
+ * variantMode is the canonical variety field; varietyLevel kept as legacy.
  */
 interface GeneratedDesign {
   id: string;
@@ -60,8 +58,11 @@ interface GeneratedDesign {
   revisedPrompt?: string;
   metadata?: {
     index: number;
-    varietyLevel: 'variations' | 'different-concepts';
+    varietyMode?: 'same-preset' | 'mix-presets';
+    varietyLevel?: 'variations' | 'different-concepts';
     eventType: string;
+    presetId?: string;
+    seed?: string;
     generatedAt: string;
   };
 }
@@ -71,17 +72,13 @@ export function ChatStep() {
     eventType,
     eventDetails,
     brandAssets,
-    questionAnswers,
-    currentQuestionIndex,
-    totalQuestions,
     designVarietyLevel,
     designFeedback,
-    addQuestionAnswer,
-    setCurrentQuestionIndex,
-    setTotalQuestions,
+    selectedPresetId,
+    varietyMode,
     setDesignVarietyLevel,
     setDesignFeedback,
-    resetQuestionFlow,
+    setVarietyMode,
     addGeneratedDesign,
     selectDesign,
     setFinalDesign,
@@ -89,12 +86,12 @@ export function ChatStep() {
     setPrintReadyUrl,
     setPreparationStatus,
     setPreparationError,
+    previousStep,
   } = useDesignWizard();
 
-  // Flow state machine
-  const [flowState, setFlowState] = useState<FlowState>('questions');
-  const [questions, setQuestions] = useState<DesignQuestion[]>([]);
-  const [currentAnswer, setCurrentAnswer] = useState<string | string[] | undefined>(undefined);
+  // Preset is now chosen upstream in BriefComposerStep, so we land directly
+  // on the variety/generate confirmation. "Change style" routes back to step 1.
+  const [flowState, setFlowState] = useState<FlowState>('variety-selection');
   const [generatedDesigns, setGeneratedDesigns] = useState<GeneratedDesign[]>([]);
   const [selectedDesignId, setSelectedDesignId] = useState<string | null>(null);
 
@@ -107,103 +104,6 @@ export function ChatStep() {
   } | null>(null);
   const [partialSuccess, setPartialSuccess] = useState(false);
   const [retryAttempts, setRetryAttempts] = useState(0);
-
-  // Load fixed questions on mount
-  useEffect(() => {
-    if (!eventType) return;
-
-    const fixedQuestions = getFixedQuestions(eventType);
-    setQuestions(fixedQuestions);
-    setTotalQuestions(fixedQuestions.length); // Will be updated when AI questions added
-  }, [eventType, setTotalQuestions]);
-
-  /**
-   * Handle question answer submission
-   */
-  const handleQuestionAnswer = (answer: string | string[]) => {
-    const currentQuestion = questions[currentQuestionIndex];
-    if (!currentQuestion) return;
-
-    // Save answer to store
-    addQuestionAnswer({
-      questionId: currentQuestion.id,
-      question: currentQuestion.question,
-      answer,
-      answeredAt: new Date(),
-    });
-
-    // Check if more questions remain
-    if (currentQuestionIndex < questions.length - 1) {
-      // Move to next question
-      setCurrentQuestionIndex(currentQuestionIndex + 1);
-      setCurrentAnswer(undefined);
-    } else {
-      // All questions answered - check if we need AI follow-ups
-      const hasAIQuestions = questions.some((q) => q.id.startsWith('follow-up-'));
-
-      if (!hasAIQuestions) {
-        // Generate AI follow-ups
-        generateAIFollowUps();
-      } else {
-        // All done, move to variety selection
-        setFlowState('variety-selection');
-      }
-    }
-  };
-
-  /**
-   * Generate AI follow-up questions
-   */
-  const generateAIFollowUps = async () => {
-    setFlowState('ai-followup');
-
-    try {
-      const response = await fetch('/api/ai/generate-question', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          eventType,
-          eventDetails,
-          fixedAnswers: questionAnswers,
-          brandAssets,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to generate follow-up questions');
-      }
-
-      const data = await response.json();
-      const followUpQuestions = data.questions || [];
-
-      console.log('[Chat Step] AI follow-ups:', followUpQuestions);
-
-      if (followUpQuestions.length > 0) {
-        // Enforce maximum of 5 total questions (3 fixed + 2 AI max)
-        const maxFollowUps = Math.min(followUpQuestions.length, 5 - questions.length);
-        const limitedFollowUps = followUpQuestions.slice(0, maxFollowUps);
-
-        console.log('[Chat Step] Adding', limitedFollowUps.length, 'follow-up questions (enforcing 5 question limit)');
-
-        // Add follow-ups to question list
-        setQuestions((prev) => [...prev, ...limitedFollowUps]);
-        setTotalQuestions(questions.length + limitedFollowUps.length);
-
-        // Resume question flow
-        setFlowState('questions');
-      } else {
-        // No follow-ups generated, skip to variety selection
-        console.log('[Chat Step] No follow-ups generated, proceeding to variety selection');
-        setFlowState('variety-selection');
-      }
-    } catch (error) {
-      console.error('[Chat Step] Error generating follow-ups:', error);
-      toast.error('Failed to generate follow-up questions');
-
-      // Continue anyway
-      setFlowState('variety-selection');
-    }
-  };
 
   /**
    * Handle variety level selection and start generation
@@ -219,12 +119,15 @@ export function ChatStep() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          answers: questionAnswers,
+          answers: [], // Questionnaire removed; subject comes from event details + preset
           eventType,
           eventDetails,
           brandAssets,
+          varietyMode,
+          // Keep varietyLevel for the legacy server-side mapping path:
           varietyLevel: level,
-          count: 3,
+          count: 4,
+          presetId: selectedPresetId ?? undefined,
         }),
       });
 
@@ -244,11 +147,11 @@ export function ChatStep() {
         setGeneratedDesigns(data.designs);
         setPartialSuccess(true);
         setFlowState('results');
-        toast.warning(`Generated ${data.designs.length} of 3 designs`, {
+        toast.warning(`Generated ${data.designs.length} of 4 designs`, {
           description: 'Click "Retry Failed" to generate missing designs',
         });
         setGenerationError({
-          message: `Generated ${data.designs.length} of 3. Click retry for remaining.`,
+          message: `Generated ${data.designs.length} of 4. Click retry for remaining.`,
           errorType: 'PARTIAL_SUCCESS',
           canRetry: true,
           errors: data.errors,
@@ -299,11 +202,22 @@ export function ChatStep() {
   };
 
   /**
-   * Save design to database and trigger background preparation
+   * Save design to database and trigger background preparation.
+   *
+   * Phase 3: also persists the unselected sibling variants as separate
+   * Design rows sharing a variantGroupId. The selected design remains the
+   * canonical artifact returned to the client and used by cart/print-prep.
    */
-  const saveAndPrepareDesign = async (design: GeneratedDesign) => {
-    // Phase 1: Save to database (BLOCKING - critical)
+  const saveAndPrepareDesign = async (
+    design: GeneratedDesign,
+    siblings: GeneratedDesign[]
+  ) => {
     setPreparationStatus('saving');
+
+    // Convert 1-based metadata.index emitted by the batch route to the
+    // 0-based variantIndex stored on Design rows.
+    const indexToVariantIndex = (idx?: number) =>
+      idx !== undefined ? idx - 1 : undefined;
 
     try {
       const saveResponse = await fetch('/api/designs/save', {
@@ -318,8 +232,23 @@ export function ChatStep() {
             eventType,
             eventDetails,
             brandAssets,
+            varietyMode,
             varietyLevel: designVarietyLevel,
           },
+          presetId: design.metadata?.presetId,
+          seed: design.metadata?.seed,
+          variantIndex: indexToVariantIndex(design.metadata?.index),
+          siblings: siblings.map((s) => ({
+            imageUrl: s.imageUrl,
+            presetId: s.metadata?.presetId,
+            seed: s.metadata?.seed,
+            variantIndex: indexToVariantIndex(s.metadata?.index),
+            metadata: {
+              generatedAt: s.metadata?.generatedAt,
+              eventType: s.metadata?.eventType,
+              varietyMode: s.metadata?.varietyMode,
+            },
+          })),
         }),
       });
 
@@ -435,6 +364,11 @@ export function ChatStep() {
       return;
     }
 
+    // Siblings: the other 3 (or fewer, after partial-success cases) variants.
+    // They get persisted alongside the selected design for analytics — the
+    // selected one remains the canonical artifact returned to cart/print-prep.
+    const siblings = generatedDesigns.filter((d) => d.id !== selectedDesignId);
+
     // Save to wizard store (existing logic)
     addGeneratedDesign({
       id: selectedDesign.id,
@@ -447,9 +381,9 @@ export function ChatStep() {
     selectDesign(selectedDesign.id);
     setFinalDesign(selectedDesign.imageUrl);
 
-    // NEW: Save and prepare design
+    // Save selected design + siblings; prepare-for-print runs in background.
     try {
-      await saveAndPrepareDesign(selectedDesign);
+      await saveAndPrepareDesign(selectedDesign, siblings);
     } catch (error) {
       // Error already handled in saveAndPrepareDesign
       // Block progression if save failed
@@ -482,13 +416,15 @@ export function ChatStep() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          answers: questionAnswers,
+          answers: [], // Questionnaire removed; subject comes from event details + preset
           eventType,
           eventDetails,
           brandAssets,
+          varietyMode,
           varietyLevel: designVarietyLevel,
-          count: 3,
+          count: 4,
           feedback, // Include feedback in request
+          presetId: selectedPresetId ?? undefined,
         }),
       });
 
@@ -516,75 +452,17 @@ export function ChatStep() {
     setFlowState('results');
   };
 
-  /**
-   * Render question input based on type
-   */
-  const renderQuestionInput = (question: DesignQuestion) => {
-    switch (question.type) {
-      case 'yes-no':
-        return (
-          <YesNoQuestion
-            options={question.options || []}
-            value={typeof currentAnswer === 'string' ? currentAnswer : undefined}
-            onChange={(value) => setCurrentAnswer(value)}
-          />
-        );
-
-      case 'style':
-        return (
-          <StyleQuestion
-            options={question.options || []}
-            value={typeof currentAnswer === 'string' ? currentAnswer : undefined}
-            onChange={(value) => setCurrentAnswer(value)}
-          />
-        );
-
-      case 'multi-select':
-        return (
-          <MultiSelectQuestion
-            options={question.options || []}
-            value={Array.isArray(currentAnswer) ? currentAnswer : []}
-            onChange={(values) => setCurrentAnswer(values)}
-            maxSelections={question.maxSelections || 3}
-          />
-        );
-
-      case 'color':
-        return (
-          <ColorQuestion
-            options={question.options || []}
-            value={Array.isArray(currentAnswer) ? currentAnswer : []}
-            onChange={(values) => setCurrentAnswer(values)}
-            maxSelections={question.maxSelections || 3}
-          />
-        );
-
-      default:
-        return <p className="text-muted-foreground">Unknown question type</p>;
-    }
-  };
-
   // Render appropriate UI based on flow state
   return (
     <AnimatePresence mode="wait">
-      {flowState === 'questions' && questions.length > 0 && (
-        <QuestionContainer
-          question={questions[currentQuestionIndex]}
-          currentIndex={currentQuestionIndex}
-          totalQuestions={totalQuestions}
-          onAnswer={() => handleQuestionAnswer(currentAnswer!)}
-          onBack={currentQuestionIndex > 0 ? () => setCurrentQuestionIndex(currentQuestionIndex - 1) : undefined}
-          currentAnswer={currentAnswer}
-          disableContinue={!currentAnswer || (Array.isArray(currentAnswer) && currentAnswer.length === 0)}
-        >
-          {renderQuestionInput(questions[currentQuestionIndex])}
-        </QuestionContainer>
-      )}
-
-      {flowState === 'ai-followup' && <AIFollowupLoader />}
-
       {flowState === 'variety-selection' && (
-        <>
+        <motion.div
+          key="variety-selection"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          className="w-full max-w-2xl mx-auto"
+        >
           {generationError && (
             <div className="mb-6">
               <ErrorAlert
@@ -609,15 +487,91 @@ export function ChatStep() {
               />
             </div>
           )}
-          <DesignVarietySelector
-            onSelect={handleVarietySelected}
-            onBack={() => setFlowState('questions')}
-            loading={false}
-          />
-        </>
+
+          <Card>
+            <CardHeader className="text-center">
+              <CardTitle className="flex items-center justify-center gap-2">
+                <Sparkles className="h-5 w-5 text-primary" />
+                Ready to Generate
+              </CardTitle>
+              <CardDescription>
+                We&apos;ll create 4 designs based on your preferences
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Locked-in style chip + "Change" affordance.
+                  Preset selection happens earlier in the flow, but users may
+                  realize at the last moment they want a different lineage. */}
+              {selectedPresetId && (
+                <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border border-border/50">
+                  <div className="space-y-0.5">
+                    <p className="text-xs uppercase tracking-wider text-muted-foreground">
+                      Style
+                    </p>
+                    <p className="text-sm font-medium">
+                      {getPreset(selectedPresetId).name}
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => previousStep()}
+                  >
+                    Change
+                  </Button>
+                </div>
+              )}
+
+              {/* Variety Mode Toggle */}
+              <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+                <div className="space-y-1">
+                  {/*
+                    TODO(human): the label + helper copy below is the user-facing
+                    explanation of "Same preset vs Mix presets" and matters for
+                    whether non-technical users understand the toggle. Rewrite
+                    the two label strings and both helper-text variants in
+                    whatever phrasing you'd actually ship.
+                  */}
+                  <Label htmlFor="variety-mode-toggle" className="text-sm font-medium">
+                    Mix in other styles
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    {varietyMode === 'mix-presets'
+                      ? 'Each design will use a different style preset (1 each from 4 styles).'
+                      : 'All designs will use your selected preset (4 variations of the same style).'}
+                  </p>
+                </div>
+                <Switch
+                  id="variety-mode-toggle"
+                  checked={varietyMode === 'mix-presets'}
+                  onCheckedChange={(checked) =>
+                    setVarietyMode(checked ? 'mix-presets' : 'same-preset')
+                  }
+                />
+              </div>
+
+              {/* Generate Button — back-navigation to preset lives on the
+                  Style chip's "Change" affordance, so there's no separate
+                  Back button here. */}
+              <Button
+                onClick={() =>
+                  handleVarietySelected(
+                    varietyMode === 'mix-presets' ? 'different-concepts' : 'variations'
+                  )
+                }
+                disabled={!selectedPresetId}
+                className="w-full"
+                size="lg"
+              >
+                <Sparkles className="mr-2 h-4 w-4" />
+                Generate Designs
+              </Button>
+            </CardContent>
+          </Card>
+        </motion.div>
       )}
 
-      {flowState === 'generating' && <GeneratingDesignsLoader count={3} estimatedTime={20} />}
+      {flowState === 'generating' && <GeneratingDesignsLoader count={4} estimatedTime={20} />}
 
       {flowState === 'results' && (
         <>
@@ -626,7 +580,7 @@ export function ChatStep() {
               <Info className="h-4 w-4" />
               <AlertTitle>Partial Success</AlertTitle>
               <AlertDescription>
-                <p className="mb-2">Generated {generatedDesigns.length} of 3 designs.</p>
+                <p className="mb-2">Generated {generatedDesigns.length} of 4 designs.</p>
                 <Button variant="outline" size="sm" onClick={handleRetry}>
                   <RefreshCw className="mr-2 h-4 w-4" />
                   Retry Failed
@@ -654,7 +608,7 @@ export function ChatStep() {
         />
       )}
 
-      {flowState === 'regenerating' && <GeneratingDesignsLoader count={3} estimatedTime={20} />}
+      {flowState === 'regenerating' && <GeneratingDesignsLoader count={4} estimatedTime={20} />}
 
       {flowState === 'completion' && <WizardCompletionStep />}
     </AnimatePresence>

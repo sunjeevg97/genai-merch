@@ -1,14 +1,18 @@
 /**
  * Design Results Gallery Component
  *
- * Displays 3 generated designs in a responsive grid layout.
+ * Displays 4 generated design variants in a 2x2 grid across all breakpoints.
  * Features:
- * - 3-column grid (1 col mobile, 2 col tablet, 3 col desktop)
+ * - 2x2 grid (compact on mobile, larger cells on desktop)
  * - Click to select/preview (blue ring indicator)
- * - Framer Motion stagger reveal (0.2s delay between cards)
+ * - Framer Motion stagger reveal
  * - "Regenerate All" button to retry
  * - "Continue with Selected" button (disabled until selection)
  * - Large preview modal on click
+ *
+ * Variant metadata: in same-preset mode each tile shares a presetId
+ * (badge shows "Variant N"); in mix-presets mode each tile has its own
+ * presetId (badge shows the preset name).
  */
 
 'use client';
@@ -28,6 +32,7 @@ import Image from 'next/image';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { STYLE_PRESETS } from '@/lib/ai/style-presets';
 import {
   Dialog,
   DialogContent,
@@ -44,14 +49,19 @@ interface GeneratedDesign {
   revisedPrompt?: string;
   metadata?: {
     index: number;
-    varietyLevel: 'variations' | 'different-concepts';
+    // varietyMode is the canonical field (Phase 3); varietyLevel kept for
+    // backward compat with anything still emitting the old shape.
+    varietyMode?: 'same-preset' | 'mix-presets';
+    varietyLevel?: 'variations' | 'different-concepts';
     eventType: string;
+    presetId?: string;
+    seed?: string;
     generatedAt: string;
   };
 }
 
 interface DesignResultsProps {
-  /** Array of generated designs (typically 3) */
+  /** Array of generated designs (4 in Phase 3, was 3 previously) */
   designs: GeneratedDesign[];
 
   /** Callback when user selects a design */
@@ -114,8 +124,8 @@ export function DesignResults({
         </p>
       </motion.div>
 
-      {/* Design Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+      {/* Design Grid — 2x2 across all breakpoints */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-6 mb-8 max-w-3xl mx-auto">
         {designs.map((design, index) => {
           const isSelected = selectedDesignId === design.id;
 
@@ -229,21 +239,31 @@ export function DesignResults({
                   </div>
 
                   {/* Design Info */}
-                  <div className="p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="font-semibold">
-                        Design {design.metadata?.index || index + 1}
+                  <div className="p-3 sm:p-4">
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <h3 className="font-semibold text-sm sm:text-base">
+                        {/* Mix-presets mode → show preset name. Same-preset
+                            mode → show "Variant N" (all share a preset). */}
+                        {(() => {
+                          const md = design.metadata;
+                          const isMix = md?.varietyMode === 'mix-presets';
+                          const presetName = md?.presetId
+                            ? STYLE_PRESETS[md.presetId]?.name
+                            : undefined;
+                          if (isMix && presetName) return presetName;
+                          return `Variant ${md?.index ?? index + 1}`;
+                        })()}
                       </h3>
-                      {design.metadata?.varietyLevel && (
-                        <Badge variant="secondary" className="text-xs">
-                          {design.metadata.varietyLevel === 'variations'
-                            ? 'Variation'
-                            : 'Concept'}
+                      {design.metadata?.varietyMode && (
+                        <Badge variant="secondary" className="text-[10px] sm:text-xs shrink-0">
+                          {design.metadata.varietyMode === 'mix-presets'
+                            ? 'Mixed'
+                            : 'Same style'}
                         </Badge>
                       )}
                     </div>
                     {isSelected && (
-                      <p className="text-sm text-primary font-medium">✓ Selected</p>
+                      <p className="text-xs sm:text-sm text-primary font-medium">✓ Selected</p>
                     )}
                   </div>
                 </CardContent>

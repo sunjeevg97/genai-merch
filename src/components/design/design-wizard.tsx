@@ -1,10 +1,9 @@
 /**
  * Design Wizard Container
  *
- * Main wizard component that orchestrates the 3-step design flow:
- * 1. Event Type Selection
- * 2. Event Details
- * 3. AI Chat Interface (with optional brand assets)
+ * Main wizard component that orchestrates the 2-step design flow:
+ * 1. Project Info (Event Type + Details combined)
+ * 2. AI Chat Interface for design generation
  *
  * After completing the wizard, users are directed to /products to browse
  * and apply their design to products.
@@ -18,8 +17,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useDesignWizard, WizardStep } from '@/lib/store/design-wizard';
-import { EventTypeStep } from '@/components/design/steps/event-type-step';
-import { EventDetailsStep } from '@/components/design/steps/event-details-step';
+import { BriefComposerStep } from '@/components/design/steps/brief-composer-step';
 import { ChatStep } from '@/components/design/steps/chat-step-new';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Check, RotateCcw } from 'lucide-react';
@@ -44,8 +42,7 @@ interface StepConfig {
 }
 
 const STEPS: StepConfig[] = [
-  { step: WizardStep.EventType, label: 'Event Type', shortLabel: 'Event' },
-  { step: WizardStep.EventDetails, label: 'Event Details', shortLabel: 'Details' },
+  { step: WizardStep.ProjectInfo, label: 'Project Info', shortLabel: 'Info' },
   { step: WizardStep.AiChat, label: 'AI Design', shortLabel: 'Design' },
 ];
 
@@ -75,13 +72,13 @@ export function DesignWizard() {
       const stepNumber = parseInt(stepParam, 10);
       console.log('[Design Wizard] Parsed step number:', stepNumber);
 
-      // Validate step number is between 1 and 3
-      if (stepNumber >= 1 && stepNumber <= 3) {
+      // Validate step number is between 1 and 2
+      if (stepNumber >= 1 && stepNumber <= 2) {
         console.log('[Design Wizard] Navigating to step:', stepNumber);
         goToStep(stepNumber as WizardStep);
         console.log('[Design Wizard] goToStep called successfully');
       } else {
-        console.log('[Design Wizard] Invalid step number (must be 1-3):', stepNumber);
+        console.log('[Design Wizard] Invalid step number (must be 1-2):', stepNumber);
       }
     } else {
       console.log('[Design Wizard] No step parameter in URL, staying on current step:', currentStep);
@@ -93,14 +90,12 @@ export function DesignWizard() {
    */
   const renderStep = () => {
     switch (currentStep) {
-      case WizardStep.EventType:
-        return <EventTypeStep />;
-      case WizardStep.EventDetails:
-        return <EventDetailsStep />;
+      case WizardStep.ProjectInfo:
+        return <BriefComposerStep />;
       case WizardStep.AiChat:
         return <ChatStep />;
       default:
-        return <EventTypeStep />;
+        return <BriefComposerStep />;
     }
   };
 

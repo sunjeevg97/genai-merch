@@ -311,8 +311,10 @@ export async function POST(request: NextRequest) {
             },
           },
         ],
+        // TODO: Re-enable once Stripe Tax head office address is configured at
+        // https://dashboard.stripe.com/test/settings/tax
         automatic_tax: {
-          enabled: true,
+          enabled: false,
         },
         payment_intent_data: {
           metadata: {

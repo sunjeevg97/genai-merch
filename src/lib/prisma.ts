@@ -14,9 +14,8 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-// Use pooler URL for Next.js app (more reliable, handles connection limits)
-// Falls back to direct URL if pooler not configured
-// Note: Trigger.dev workers may need DIRECT_DATABASE_URL set explicitly
+// Use the pooler URL (DATABASE_URL). The "direct" URL is IPv6-only on Supabase free
+// tier and unreachable from many local networks.
 const databaseUrl = process.env.DATABASE_URL || process.env.DIRECT_DATABASE_URL;
 
 export const prisma =

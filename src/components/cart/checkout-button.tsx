@@ -1,50 +1,44 @@
-/**
- * Checkout Button Component
- *
- * Navigates to the design wizard's checkout step for order review.
- */
-
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { ShoppingBag } from 'lucide-react';
+import { useState } from 'react';
+import { Loader2, ShoppingBag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { useCart } from '@/lib/cart/store';
+import { createCheckoutSession, redirectToCheckout } from '@/lib/stripe/client';
 
 interface CheckoutButtonProps {
   disabled?: boolean;
   itemCount: number;
-  subtotal: number;
 }
 
-export function CheckoutButton({ disabled, itemCount, subtotal }: CheckoutButtonProps) {
-  const router = useRouter();
+export function CheckoutButton({ disabled, itemCount }: CheckoutButtonProps) {
+  const { items } = useCart();
+  const [loading, setLoading] = useState(false);
 
-  const handleCheckout = () => {
-    console.log('[Checkout Button] Button clicked!', { disabled, itemCount, subtotal });
-
+  const handleCheckout = async () => {
     if (disabled || itemCount === 0) {
-      console.log('[Checkout Button] Cart is empty, showing error');
       toast.error('Your cart is empty');
       return;
     }
 
-    console.log('[Checkout Button] Navigating to checkout step...');
-    console.log('[Checkout Button] Current URL:', window.location.href);
+    setLoading(true);
 
     try {
-      // Navigate to design wizard's checkout step (Step 5)
-      const targetUrl = '/design/create?step=5';
-      console.log('[Checkout Button] Target URL:', targetUrl);
-      router.push(targetUrl);
-      console.log('[Checkout Button] Navigation triggered successfully');
-
-      // Log URL after a brief delay to see if it changed
-      setTimeout(() => {
-        console.log('[Checkout Button] URL after navigation:', window.location.href);
-      }, 100);
+      const { sessionUrl, orderNumber } = await createCheckoutSession({ items });
+      toast.success(`Order ${orderNumber} created`, {
+        description: 'Redirecting to secure checkout…',
+      });
+      await redirectToCheckout(sessionUrl);
     } catch (error) {
-      console.error('[Checkout Button] Navigation error:', error);
+      console.error('[CheckoutButton] Failed to start checkout:', error);
+      toast.error('Could not start checkout', {
+        description:
+          error instanceof Error
+            ? error.message
+            : 'Please try again in a moment.',
+      });
+      setLoading(false);
     }
   };
 
@@ -52,11 +46,20 @@ export function CheckoutButton({ disabled, itemCount, subtotal }: CheckoutButton
     <Button
       size="lg"
       className="w-full"
-      disabled={disabled || itemCount === 0}
+      disabled={disabled || itemCount === 0 || loading}
       onClick={handleCheckout}
     >
-      <ShoppingBag className="mr-2 h-5 w-5" />
-      Proceed to Checkout
+      {loading ? (
+        <>
+          <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+          Preparing checkout…
+        </>
+      ) : (
+        <>
+          <ShoppingBag className="mr-2 h-5 w-5" />
+          Proceed to Checkout
+        </>
+      )}
     </Button>
   );
 }

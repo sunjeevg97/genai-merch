@@ -103,6 +103,23 @@ export function MockupPreview({
   }>>([]);
   const [generationProgress, setGenerationProgress] = useState({ current: 0, total: 0 });
 
+  /**
+   * Lazy-generation state (Option A streamlining)
+   * On first render we only generate ONE primary placement (see preference
+   * order in pickPrimaryCombination). The remaining placements stay here as
+   * placeholders and are generated on demand when the user clicks them.
+   *
+   * NOTE: If we ever need pre-warmed multi-placement previews (e.g. cart
+   * thumbnails), see Option B note in src/lib/printful/mockups.ts — Printful
+   * V2 supports multiple products[] entries in one task.
+   */
+  const [pendingCombinations, setPendingCombinations] = useState<Array<{
+    styleId: number;
+    styleName: string;
+    placement: string;
+  }>>([]);
+  const [loadingPlacements, setLoadingPlacements] = useState<Set<string>>(new Set());
+
   // Modal state for viewing and adding to cart
   const [selectedMockup, setSelectedMockup] = useState<{
     styleId: number;
@@ -222,6 +239,50 @@ export function MockupPreview({
     };
 
     return placementMap[placement] || placement.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  };
+
+  /**
+   * Pick the single "primary" placement to generate eagerly on page load.
+   *
+   * Priority order:
+   *   1. User's currently-selected placement prop (front/back via the
+   *      placement selector tabs on the product detail page).
+   *   2. The first match in PREFERRED_PRIMARIES that exists in combinations.
+   *   3. The first combination, if nothing else matches.
+   *
+   * Why this matters: previously we generated ALL placements eagerly, which
+   * blew through Printful's rate limit (~140s wall-clock for a 4-placement
+   * cap). Now we generate 1 (~8s) and let users opt into the rest.
+   */
+  const pickPrimaryCombination = <T extends { placement: string }>(
+    combinations: T[],
+    preferredPlacement?: string,
+  ): T | null => {
+    if (combinations.length === 0) return null;
+
+    // 1. Honor the user's explicit placement prop if it's in the list.
+    if (preferredPlacement) {
+      const match = combinations.find((c) => c.placement === preferredPlacement);
+      if (match) return match;
+    }
+
+    // 2. Fall back to conventional primaries (front-facing wins).
+    const PREFERRED_PRIMARIES = [
+      'front',
+      'embroidery_front',
+      'embroidery_front_large',
+      'front_dtf_hat',
+      'front_dtf',
+      'default',
+      'back',
+    ];
+    for (const preferred of PREFERRED_PRIMARIES) {
+      const match = combinations.find((c) => c.placement === preferred);
+      if (match) return match;
+    }
+
+    // 3. Anything is better than nothing.
+    return combinations[0];
   };
 
   /**
@@ -377,11 +438,8 @@ export function MockupPreview({
         }
       }
 
-      console.log('[Batch Generation] Generated', combinations.length, 'mockups (1 per placement)')
-
-      console.log('[Batch Generation] Generated', combinations.length, 'combinations for', selectedTechnique);
+      console.log('[Batch Generation] Built', combinations.length, 'combinations (1 per placement)');
       console.log('[Batch Generation] Combinations:', combinations.map(c => `${c.styleName} (${c.placement})`));
-      setGenerationProgress({ current: 0, total: combinations.length });
 
       if (combinations.length === 0) {
         toast.info('No mockup styles available for this technique', {
@@ -391,61 +449,86 @@ export function MockupPreview({
         return;
       }
 
-      // Step 3: Generate mockups for all combinations
-      const results: Array<{
-        styleId: number;
-        styleName: string;
-        placement: string;
-        mockupUrl: string;
-      }> = [];
+      // Option A streamlining: only generate the PRIMARY placement now.
+      // Other placements are stashed in pendingCombinations and rendered as
+      // placeholder cards the user can click to generate on demand. This keeps
+      // us inside Printful's rate limit and gets the first mockup on screen
+      // ~14× faster than the previous "generate everything" loop.
+      const primary = pickPrimaryCombination(combinations, placement);
+      const pending = primary
+        ? combinations.filter((c) => c.placement !== primary.placement)
+        : combinations;
 
-      for (let i = 0; i < combinations.length; i++) {
-        const combo = combinations[i];
+      setPendingCombinations(pending);
+      setGenerationProgress({ current: 0, total: primary ? 1 : 0 });
 
-        setGenerationProgress({ current: i + 1, total: combinations.length });
-
-        console.log(`[Batch Generation] Generating ${i + 1}/${combinations.length}:`, combo);
-
-        const mockupUrl = await generateSingleMockup(combo.styleId, combo.placement, false);
-
-        if (mockupUrl) {
-          results.push({
-            ...combo,
-            mockupUrl,
-          });
-        }
-
-        // Small delay to avoid overwhelming the API
-        await new Promise(resolve => setTimeout(resolve, 300));
+      if (!primary) {
+        setBatchGenerating(false);
+        return;
       }
 
-      setGeneratedMockups(results);
+      console.log('[Batch Generation] Primary placement:', primary.placement, '— deferring', pending.length, 'others');
+      setGenerationProgress({ current: 1, total: 1 });
 
-      const successCount = results.length;
-      const failCount = combinations.length - results.length;
+      const mockupUrl = await generateSingleMockup(primary.styleId, primary.placement, false);
 
-      console.log('[Batch Generation] Complete:', {
-        successful: successCount,
-        failed: failCount,
-        total: combinations.length
-      });
-
-      if (failCount > 0) {
-        toast.success('Mockup generation complete!', {
-          description: `Generated ${successCount} mockups (${failCount} incompatible with this product)`,
+      if (mockupUrl) {
+        setGeneratedMockups([{ ...primary, mockupUrl }]);
+        toast.success('Mockup ready!', {
+          description: pending.length > 0
+            ? `Showing ${getFriendlyPlacementLabel(primary.placement)}. Click any other placement below to generate it.`
+            : 'Your design preview is ready.',
         });
       } else {
-        toast.success('Mockup generation complete!', {
-          description: `Generated ${successCount} mockup variations`,
+        toast.error('Failed to generate primary mockup', {
+          description: 'Please try regenerating or selecting a different placement.',
         });
       }
     } catch (error) {
       console.error('[Batch Generation] Error:', error);
-      toast.error('Batch generation failed', {
+      toast.error('Mockup generation failed', {
         description: error instanceof Error ? error.message : 'Please try again',
       });
     } finally {
       setBatchGenerating(false);
+    }
+  };
+
+  /**
+   * Lazy-generate a single pending placement on demand (Option A).
+   * Called when the user clicks one of the placeholder cards.
+   */
+  const handleGeneratePending = async (combo: {
+    styleId: number;
+    styleName: string;
+    placement: string;
+  }) => {
+    if (loadingPlacements.has(combo.placement)) return;
+
+    setLoadingPlacements((prev) => {
+      const next = new Set(prev);
+      next.add(combo.placement);
+      return next;
+    });
+
+    try {
+      const mockupUrl = await generateSingleMockup(combo.styleId, combo.placement, false);
+
+      if (mockupUrl) {
+        setGeneratedMockups((prev) => [...prev, { ...combo, mockupUrl }]);
+        setPendingCombinations((prev) => prev.filter((c) => c.placement !== combo.placement));
+        toast.success(`${getFriendlyPlacementLabel(combo.placement)} ready!`);
+      } else {
+        toast.error('Failed to generate mockup', {
+          description: 'Please try again in a moment.',
+        });
+      }
+    } finally {
+      setLoadingPlacements((prev) => {
+        const next = new Set(prev);
+        next.delete(combo.placement);
+        return next;
+      });
     }
   };
 
@@ -545,14 +628,20 @@ export function MockupPreview({
         console.log(`[Mockup Preview] Found ${cachedMockups.length}/${combinations.length} cached mockups`);
 
         if (cachedMockups.length > 0) {
-          // Load cached mockups
+          // Load cached mockups, and queue the rest as on-demand placeholders.
+          // This keeps the lazy-generation UX consistent across cold and warm loads.
           setGeneratedMockups(cachedMockups);
+          const cachedPlacements = new Set(cachedMockups.map((m) => m.placement));
+          setPendingCombinations(
+            combinations.filter((c) => !cachedPlacements.has(c.placement)),
+          );
           toast.success(`Loaded ${cachedMockups.length} cached mockup${cachedMockups.length > 1 ? 's' : ''}`, {
             description: 'Previously generated mockups are ready to view',
           });
         } else {
-          // Clear any existing mockups if no cache found
+          // No cache hit — reset, let the auto-generation effect kick in.
           setGeneratedMockups([]);
+          setPendingCombinations([]);
           console.log('[Mockup Preview] No cached mockups found, user can generate new ones');
         }
       } catch (error) {
@@ -820,6 +909,8 @@ export function MockupPreview({
                   size="sm"
                   onClick={() => {
                     setGeneratedMockups([]);
+                    setPendingCombinations([]);
+                    setLoadingPlacements(new Set());
                     setGenerationProgress({ current: 0, total: 0 });
                   }}
                 >
@@ -833,7 +924,7 @@ export function MockupPreview({
             <div className="space-y-3">
               {generatedMockups.map((mockup, index) => (
                 <Card
-                  key={index}
+                  key={`generated-${index}`}
                   className="group cursor-pointer overflow-hidden hover:shadow-lg transition-shadow"
                   onClick={() => handleMockupClick(mockup)}
                 >
@@ -868,6 +959,45 @@ export function MockupPreview({
                   </div>
                 </Card>
               ))}
+
+              {/* Pending placements — click to generate on demand (Option A) */}
+              {pendingCombinations.map((combo) => {
+                const isLoading = loadingPlacements.has(combo.placement);
+                return (
+                  <Card
+                    key={`pending-${combo.placement}`}
+                    className={`overflow-hidden border-dashed transition-shadow ${
+                      isLoading
+                        ? 'cursor-wait opacity-80'
+                        : 'cursor-pointer hover:shadow-md hover:border-primary/50'
+                    }`}
+                    onClick={() => !isLoading && handleGeneratePending(combo)}
+                  >
+                    <div className="flex items-center gap-4 p-4">
+                      {/* Placeholder icon block */}
+                      <div className="relative flex h-24 w-24 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted/60">
+                        {isLoading ? (
+                          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                        ) : (
+                          <Plus className="h-6 w-6 text-muted-foreground" />
+                        )}
+                      </div>
+
+                      {/* Details */}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-foreground">
+                          {getFriendlyPlacementLabel(combo.placement)}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {isLoading
+                            ? 'Generating mockup…'
+                            : 'Click to preview this placement'}
+                        </p>
+                      </div>
+                    </div>
+                  </Card>
+                );
+              })}
             </div>
           </div>
         )}

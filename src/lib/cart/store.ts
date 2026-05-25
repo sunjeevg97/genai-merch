@@ -105,7 +105,7 @@ export const useCart = create<CartStore>()(
          * Otherwise, add as new item.
          */
         addItem: (item) => {
-          const { items, _calculateSubtotal, _calculateItemCount } = get();
+          const { items } = get();
 
           // Check if item already exists (same variant + design + mockup configuration)
           const existingItemIndex = items.findIndex(
@@ -133,8 +133,8 @@ export const useCart = create<CartStore>()(
 
           set({
             items: newItems,
-            subtotal: _calculateSubtotal(),
-            itemCount: _calculateItemCount(),
+            subtotal: newItems.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0),
+            itemCount: newItems.reduce((sum, i) => sum + i.quantity, 0),
             isOpen: true, // Open cart when item is added
           });
         },
@@ -143,13 +143,13 @@ export const useCart = create<CartStore>()(
          * Remove item from cart
          */
         removeItem: (itemId) => {
-          const { items, _calculateSubtotal, _calculateItemCount } = get();
+          const { items } = get();
           const newItems = items.filter((item) => item.id !== itemId);
 
           set({
             items: newItems,
-            subtotal: _calculateSubtotal(),
-            itemCount: _calculateItemCount(),
+            subtotal: newItems.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0),
+            itemCount: newItems.reduce((sum, i) => sum + i.quantity, 0),
           });
         },
 
@@ -159,7 +159,7 @@ export const useCart = create<CartStore>()(
          * If quantity is 0 or negative, remove item.
          */
         updateQuantity: (itemId, quantity) => {
-          const { items, removeItem, _calculateSubtotal, _calculateItemCount } = get();
+          const { items, removeItem } = get();
 
           // Remove item if quantity is 0 or negative
           if (quantity <= 0) {
@@ -174,8 +174,8 @@ export const useCart = create<CartStore>()(
 
           set({
             items: newItems,
-            subtotal: _calculateSubtotal(),
-            itemCount: _calculateItemCount(),
+            subtotal: newItems.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0),
+            itemCount: newItems.reduce((sum, i) => sum + i.quantity, 0),
           });
         },
 

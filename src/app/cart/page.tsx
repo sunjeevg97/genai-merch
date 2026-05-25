@@ -108,7 +108,7 @@ export default function CartPage() {
               <Separator className="my-6" />
               <CartSummary subtotal={subtotal} itemCount={itemCount} />
               <div className="mt-4">
-                <CheckoutButton itemCount={itemCount} subtotal={subtotal} />
+                <CheckoutButton itemCount={itemCount} />
               </div>
             </div>
           </div>
@@ -117,7 +117,7 @@ export default function CartPage() {
           <div className="hidden lg:block">
             <CartSummary subtotal={subtotal} itemCount={itemCount} />
             <div className="mt-4">
-              <CheckoutButton itemCount={itemCount} subtotal={subtotal} />
+              <CheckoutButton itemCount={itemCount} />
             </div>
 
             {/* Continue Shopping */}

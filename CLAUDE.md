@@ -7280,44 +7280,30 @@ This will:
 
 ## AI-First Design Wizard Flow
 
-GenAI-Merch features a comprehensive 5-step wizard that guides users from concept to final design. The wizard leverages AI at every step while maintaining full user control.
+GenAI-Merch features a 2-step wizard that captures the user's design intent and
+generates four variations in one pass. Product selection and checkout happen on
+separate `/products` and `/checkout` routes after the wizard completes.
 
 ### Wizard Steps Overview
 
-**Step 1: Event Type Selection**
-- User selects the purpose of their merchandise (charity, sports, company, family, school, other)
-- This context informs AI design generation in later steps
-- Influences design recommendations and starter prompts
-- **Auto-clear feature**: Changing event type clears event details to prevent orphaned data
+**Step 1: Brief Composer** ([brief-composer-step.tsx](src/components/design/steps/brief-composer-step.tsx))
+- Single-screen consolidation of what used to be separate Event Type + Event Details steps.
+- **Hero**: a free-text textarea where the user describes the design in their own words (10-character min).
+- **Optional inline pills**: event type, audience, name. None are required — they enrich the prompt when present, never block progression.
+- **Inline style preset picker**: 12 presets across 4 buckets (vintage / trending / refined / bold), with 3 event-mapped defaults surfaced first and "See all 12" expansion.
+- **"Surprise me" button**: autofills a concrete starter brief tailored to the chosen event type (defined in `getSurpriseMePrompt()`). Sets the bar for what users think a good prompt looks like.
+- **Generate** is gated on: non-empty brief (≥10 chars) AND a selected preset. Everything else is optional.
 
-**Step 2: Event Details**
-- Dynamic form based on event type selection
-- Gathers event-specific information (team name, cause, industry, etc.)
-- Required fields vary by event type (validated before progression)
-- All details feed into AI prompt generation for personalized designs
+**Step 2: Design Generation** ([chat-step-new.tsx](src/components/design/steps/chat-step-new.tsx))
+- Lands directly on the variety/generate confirmation card (preset was picked upstream).
+- Shows a "locked-in style" chip with a **Change** button that routes back to Step 1 via `previousStep()` — preset stays selected, brief stays intact.
+- **Variety toggle**: same-preset (4 variations of one style) vs mix-presets (1 each from 4 styles).
+- **Generate** fires `/api/generate-designs-batch` and produces 4 designs in parallel.
+- Results gallery → user selects one → save endpoint persists the selected design **plus** the unselected siblings under a shared `variantGroupId` for analytics.
+- Background print-prep runs after save (non-blocking).
+- On completion: `WizardCompletionStep` shows CTAs to browse products.
 
-**Step 3: AI Design Chat**
-- Split-screen interface: Chat on left, generated designs gallery on right
-- Users chat with GPT-4 to refine their design ideas
-- DALL-E 3 generates designs based on user descriptions
-- **Optional brand assets**: Upload logos, define colors, fonts, and brand voice
-- All generated designs are saved to the Zustand store
-- Users select their favorite design to continue
-
-**Step 4: Choose Products**
-- Full product catalog with filtering and search
-- Inline cart sidebar for real-time order building
-- Product detail modal with mockup preview
-- Auto-generates mockups with wizard design
-- Cached mockup loading for instant retrieval
-
-**Step 5: Checkout & Payment**
-- Order review with mockup previews
-- Stripe checkout integration
-- Guest checkout support
-- Order creation with PENDING_PAYMENT status
-- Redirect to Stripe hosted checkout
-- Success page with order confirmation
+**After the wizard**: user is directed to `/products` to browse catalog and apply their design. Cart and Stripe checkout live on their own routes — they are no longer wizard steps.
 
 ---
 
@@ -7405,48 +7391,39 @@ The wizard features a sticky header with integrated navigation controls that pro
 
 ---
 
-### Event Details Auto-Clear Feature
+### Style Preset System
 
-When a user navigates back to Step 1 and selects a different event type, the event details form is automatically cleared to prevent orphaned data from the previous type.
+The questionnaire (3 fixed questions + up to 2 AI follow-ups) was replaced with a
+12-preset library that anchors each generation to a specific visual lineage rather
+than the generic "AI design" default.
 
-#### Why This Matters
+**Location**: [src/lib/ai/style-presets.ts](src/lib/ai/style-presets.ts)
 
-**Problem**: Without auto-clearing, changing from "Charity" to "Sports" would leave charity-specific fields (like `cause`) in the state, creating data inconsistency and confusing AI prompts.
+**Buckets** (each has a distinct hue in the picker for visual scanning):
+- **Vintage**: Vintage Collegiate, 90s Skate, American Traditional
+- **Trending**: Y2K Chrome, Acid Rave, Western Revival
+- **Refined**: Editorial Illustration, Risograph Print, Minimal Line, Hand Lettered
+- **Bold**: Bootleg Tee, Death Metal Logo
 
-**Solution**: The `setEventType()` function in the Zustand store detects event type changes and conditionally clears the `eventDetails` object.
+**Event-type defaults**: `getPresetDefaultsForEventType(eventType)` returns 3 (or 4 for "other") presets surfaced as suggestions at the top of the picker. Users can expand to "See all 12" grouped by bucket.
 
-#### Implementation
+**How the preset flows downstream**:
+1. User picks `presetId` in BriefComposerStep (Step 1).
+2. `selectedPresetId` is stored in the Zustand wizard store with `persist`.
+3. `/api/generate-designs-batch` receives `presetId` and either applies it to all 4 designs (`same-preset` mode) or rotates through 4 presets (`mix-presets` mode).
+4. Each generated design is tagged with `presetId` + `seed` in its metadata so we can reproduce or iterate on it later.
 
-**Location**: `src/lib/store/design-wizard.ts` lines 691-704
+**Schema columns added in Phase 3** (`Design` model):
+- `presetId String?` — the StylePreset id, indexed for analytics (`groupBy({ by: ['presetId'] })`).
+- `seed String?` — generation seed (tracking token; Gemini's image API doesn't accept seeds yet, so this is currently for correlation only).
+- `variantGroupId String?` — shared across all 4 sibling Design rows produced by one batch generation. Indexed.
+- `variantIndex Int?` — position within the variant group (0-3).
 
-```typescript
-setEventType: (eventType: EventType) => {
-  const { eventType: currentEventType } = get();
+When the user picks one of the 4 variants in `DesignResults`, the save endpoint (`/api/designs/save`) persists **all 4** as Design rows sharing the same `variantGroupId`. The selected variant's `Design.id` is what flows into Cart / Order / print prep — siblings exist for analytics ("which compositions did users reject within a chosen style?"). Sibling persist failures are non-blocking; the selected design is the user-critical artifact.
 
-  // Only clear eventDetails if event type actually changed
-  if (currentEventType !== eventType) {
-    set({
-      eventType,
-      eventDetails: {}, // Clear old details for new event type
-    });
-  } else {
-    // Same event type - preserve existing details
-    set({ eventType });
-  }
-},
-```
-
-#### Behavior
-
-- **Type changed** (Charity → Sports): Form cleared, providing a fresh start for the new event type
-- **Same type re-selected** (Sports → Sports): Form preserved, preventing accidental data loss
-
-#### Benefits
-
-1. **Data Consistency**: Prevents orphaned fields from previous event type
-2. **Better UX**: Users expect a clean form when changing event type
-3. **AI Prompt Quality**: Ensures AI prompts only include relevant event details
-4. **Correct Validation**: No ghost validation errors from previous type's fields
+**Variety mode → batch generation plan** (see `buildGenerationPlan` in [generate-designs-batch/route.ts](src/app/api/generate-designs-batch/route.ts)):
+- `same-preset`: 1 presetId × 4 seeds → identical STYLE prompts; variety from Gemini's stochasticity.
+- `mix-presets`: 4 presetIds × 1 seed each → drawn from `EVENT_TYPE_PRESET_DEFAULTS[eventType]`, padded with `WILDCARD_PRESET_ID` (`editorial_illustration`) when the event type only maps to 3 defaults. "other" maps to 4 defaults already and uses them directly.
 
 ---
 
@@ -7572,171 +7549,6 @@ Manual logo upload uses the same Supabase Storage infrastructure as brand assets
 - **Validation**: Client-side (file type, size) + Server-side (DPI, dimensions)
 - **Max Size**: 5MB
 - **Formats**: PNG, JPG, SVG
-
----
-
-## 5-Step Design Wizard with Integrated Checkout
-
-GenAI-Merch features a complete 5-step wizard flow that takes users from concept to payment:
-
-### Wizard Steps
-
-**Step 1: Event Type Selection**
-- User selects purpose: charity, sports, company, family, school, other
-- Contextualizes AI design generation in later steps
-
-**Step 2: Event Details**
-- Dynamic form based on event type
-- Gathers relevant context (team name, sport, cause, etc.)
-- All fields feed into AI prompt generation
-
-**Step 3: AI Design Chat**
-- Split-screen: Chat interface + design gallery
-- Optional brand assets (logos, colors, fonts, voice)
-- GPT-4 helps refine design ideas
-- DALL-E 3 generates designs
-- Designs saved to Zustand store
-
-**Step 4: Product Showcase**
-- Full product catalog with filtering and search
-- Inline cart sidebar for real-time order building
-- Product detail modal with mockup preview
-- **Auto-generates mockups** with wizard design
-- **Cached mockup loading** - instant retrieval on variant switching
-- Add to cart with customization metadata
-
-**Step 5: Checkout & Payment**
-- Order review with mockup previews
-- Stripe checkout integration
-- Guest checkout support
-- Order creation with PENDING_PAYMENT status
-- Redirect to Stripe hosted checkout
-- Success page with order confirmation
-
-### Cart Integration in Step 4
-
-The Product Showcase step includes a persistent cart sidebar:
-
-**Features:**
-- Real-time cart updates
-- Quantity controls (+/- buttons)
-- Item removal
-- Mockup thumbnails
-- Technique and placement badges
-- Subtotal calculation
-- "Proceed to Checkout" button → Step 5
-
-**Cart Item Structure:**
-```typescript
-{
-  id: string,                  // Temporary cart ID
-  productVariantId: string,    // Database variant ID
-  product: { name, imageUrl, productType },
-  variant: { name, size, color },
-  design: {
-    id: 'wizard-design',      // Placeholder (not database ID)
-    imageUrl: string,          // Design URL
-    thumbnailUrl: string
-  },
-  mockupConfig: {
-    mockupUrl: string,         // Generated mockup
-    technique: 'dtg' | 'embroidery' | 'sublimation',
-    placement: 'front' | 'back' | 'sleeve_left' | 'sleeve_right',
-    styleId: number,           // Printful style ID
-    styleName: string          // e.g., "Men's T-Shirt"
-  },
-  quantity: number,
-  unitPrice: number            // Price in cents
-}
-```
-
-### Checkout Navigation Flow
-
-**Cart Sidebar → Checkout Step:**
-1. User clicks "Proceed to Checkout" in cart sidebar (Step 4)
-2. `handleCheckout` calls `nextStep()` from Zustand store
-3. `currentStep` changes from 4 → 5
-4. Design Wizard re-renders with CheckoutStep component
-5. URL remains `/design/create` (no query param update needed)
-
-**Checkout Step → Stripe Payment:**
-1. User reviews order items and pricing
-2. Clicks "Proceed to Payment" button
-3. `createCheckoutSession()` API call creates:
-   - Order record with PENDING_PAYMENT status
-   - OrderItems with frozen product/variant details
-   - Stripe checkout session with line items
-4. Design records handled intelligently:
-   - **Placeholder IDs** (`'wizard-design'`) → stored in customizationData only
-   - **Real UUIDs** → connected to Design table relation
-   - UUID validation regex: `/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i`
-5. Redirects to Stripe hosted checkout page
-6. After payment, redirects to success page
-7. Cart automatically cleared on success
-
-### Key Implementation Details
-
-**Wizard State Management (Zustand):**
-```typescript
-interface DesignWizardState {
-  currentStep: 1 | 2 | 3 | 4 | 5,
-  eventType: EventType | null,
-  eventDetails: EventDetails,
-  brandAssets: BrandAssets,
-  generatedDesigns: GeneratedDesign[],
-  selectedDesignId: string | null,
-  finalDesignUrl: string | null,
-
-  // Navigation
-  nextStep: () => void,
-  previousStep: () => void,
-  goToStep: (step) => void,
-}
-```
-
-**Cart State Management (Zustand):**
-```typescript
-interface CartStore {
-  items: CartItem[],
-  subtotal: number,        // Auto-calculated
-  itemCount: number,       // Auto-calculated
-
-  addItem: (item) => void,
-  removeItem: (id) => void,
-  updateQuantity: (id, qty) => void,
-  clearCart: () => void,
-}
-```
-
-**Checkout API Route (`/api/stripe/create-checkout`):**
-- Validates product availability and pricing
-- Creates Order with PENDING_PAYMENT status
-- Creates OrderItems with customization metadata
-- Handles placeholder vs real Design IDs
-- Creates Stripe session with shipping options
-- Returns session ID and URL for redirect
-
-**Success Page (`/checkout/success`):**
-- Retrieves session details from Stripe
-- Displays order confirmation
-- Shows final pricing (with Stripe-calculated shipping/tax)
-- Automatically clears cart
-- Provides "Track Order" and "Continue Shopping" CTAs
-
-### Recent Fixes (2026-01-10)
-
-**Fix 1: Checkout Button Navigation**
-- **Issue**: Cart sidebar "Proceed to Checkout" button wasn't navigating to Step 5
-- **Root Cause**: Button called `complete()` instead of `nextStep()`
-- **Solution**: Updated ProductShowcaseStep to call `nextStep()` for checkout navigation
-- **Files Changed**: `src/components/design/steps/product-showcase-step.tsx`
-
-**Fix 2: Design Record Connection Error**
-- **Issue**: Checkout failed with "No 'Design' record found" error
-- **Root Cause**: Cart items had placeholder ID `'wizard-design'` instead of database UUID
-- **Solution**: Added UUID validation before Design relation connection
-- **Impact**: Placeholder IDs skip relation, design URL still saved in customizationData
-- **Files Changed**: `src/app/api/stripe/create-checkout/route.ts`
 
 ---
 
@@ -7940,7 +7752,7 @@ stripe listen --forward-to localhost:3000/api/webhooks/stripe
 
 ---
 
-**Last Updated**: 2026-01-24 (Added Trigger.dev database connection fix for Supabase pooler issues)
+**Last Updated**: 2026-05-23 (Phase 3 image-gen overhaul: 4-variant batch generation with same-preset/mix-presets modes, sibling Design rows under shared variantGroupId, presetId+seed+variantGroupId+variantIndex columns on Design model, GPT-4o-mini refinement removed from single-design route, AI follow-up questions + fixed-question questionnaire deleted, stale "5-Step Design Wizard" section pruned from these docs)
 
 
 <!-- TRIGGER.DEV basic START -->

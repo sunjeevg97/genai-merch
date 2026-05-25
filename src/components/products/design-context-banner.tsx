@@ -8,6 +8,7 @@
 
 'use client';
 
+import { useState } from 'react';
 import { useDesignWizard } from '@/lib/store/design-wizard';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,10 +19,10 @@ import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export function DesignContextBanner() {
-  const { finalDesignUrl, resetWizard } = useDesignWizard();
+  const { finalDesignUrl } = useDesignWizard();
+  const [hidden, setHidden] = useState(false);
 
-  // Don't show banner if no design is selected
-  if (!finalDesignUrl) {
+  if (!finalDesignUrl || hidden) {
     return null;
   }
 
@@ -78,8 +79,8 @@ export function DesignContextBanner() {
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                  onClick={() => resetWizard()}
-                  title="Clear design"
+                  onClick={() => setHidden(true)}
+                  title="Hide banner (design is preserved)"
                 >
                   <X className="h-4 w-4" />
                 </Button>

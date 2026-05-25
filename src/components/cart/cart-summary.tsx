@@ -8,6 +8,7 @@
 
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import { Lock } from 'lucide-react';
 
 interface CartSummaryProps {
   subtotal: number; // Price in cents
@@ -57,11 +58,13 @@ export function CartSummary({ subtotal, itemCount }: CartSummaryProps) {
           <span className="text-lg font-bold">{formatPrice(subtotal)}</span>
         </div>
 
-        {/* Disclaimer */}
-        <p className="text-xs text-muted-foreground">
-          Final shipping cost and tax will be calculated during checkout based on your
-          delivery address.
-        </p>
+        {/* Transition reassurance — last surface before the Stripe redirect. */}
+        <div className="flex items-start gap-2 rounded-md bg-muted/50 px-3 py-2.5 text-xs text-muted-foreground">
+          <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <p>
+            You&apos;re one screen away. Stripe handles shipping, tax, and payment securely.
+          </p>
+        </div>
       </CardContent>
 
       <CardFooter className="text-xs text-muted-foreground">

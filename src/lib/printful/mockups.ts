@@ -473,6 +473,15 @@ export async function generateMockup(
     console.log('[Mockup] Adding embroidery stitch_color option: 0010 (white)');
   }
 
+  // FUTURE WORK (Option B — batched multi-placement generation):
+  //   Printful V2's MockupRequest accepts an array of `products[]` entries,
+  //   each with its own style_id and placements[]. Today we generate one
+  //   placement per Printful task and fan out from MockupPreview. That hits
+  //   the rate limit fast (~140s for 4 caps). If we ever need to pre-warm
+  //   multiple placements eagerly (e.g. catalog thumbnails, cart previews),
+  //   add a `generateMockupsBatch(combos[])` helper that builds N entries
+  //   inside `products[]` — one Printful task, one rate-limit hit, ~10s.
+  //   See [mockup-preview.tsx] pendingCombinations for the call-site hook.
   const request: MockupRequest = {
     format: 'jpg',
     products: [

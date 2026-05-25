@@ -11,9 +11,8 @@ import { use } from 'react';
 import { notFound, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowLeft, Package, Eye, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Package, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { VariantSelector } from '@/components/products/variant-selector';
@@ -60,7 +59,6 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
   const [selectedTechnique, setSelectedTechnique] = useState<PrintTechnique | null>(null);
   const [design, setDesign] = useState<DesignData | null>(null);
-  const [viewMode, setViewMode] = useState<'product' | 'mockup'>('product');
   const [placement, setPlacement] = useState<MockupPlacement>('front');
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
@@ -124,13 +122,6 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
       }
     }
   }, [product?.name, selectedTechnique]);
-
-  // Auto-switch to mockup view when design is selected
-  useEffect(() => {
-    if (design && selectedVariant) {
-      setViewMode('mockup');
-    }
-  }, [design, selectedVariant]);
 
   // Show sticky cart when scrolled past the main add-to-cart button
   useEffect(() => {
@@ -342,25 +333,8 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
 
           {/* RIGHT: Product Image/Mockup */}
           <div className="order-1 lg:order-2 lg:sticky lg:top-6 lg:self-start space-y-4">
-            {/* View Mode Toggle */}
-            {design && selectedVariant && (
-              <Tabs
-                value={viewMode}
-                onValueChange={(v) => setViewMode(v as 'product' | 'mockup')}
-                className="w-full"
-              >
-                <TabsList className="grid w-full grid-cols-2 bg-muted">
-                  <TabsTrigger value="product" className="text-sm">Product View</TabsTrigger>
-                  <TabsTrigger value="mockup" className="text-sm">
-                    <Eye className="mr-1.5 h-3.5 w-3.5" />
-                    Mockup Preview
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
-            )}
-
-            {/* Placement Selector (for mockup view with design) */}
-            {viewMode === 'mockup' && design && product.productType.includes('shirt') && (
+            {/* Placement Selector — only when mockup is showing and product supports back-print */}
+            {design && selectedVariant && product.productType.includes('shirt') && (
               <div className="flex items-center gap-2">
                 <span className="text-sm text-muted-foreground">Placement:</span>
                 <Tabs value={placement} onValueChange={(v) => setPlacement(v as MockupPlacement)}>
@@ -372,10 +346,10 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
               </div>
             )}
 
-            {/* Image Display */}
-            {viewMode === 'mockup' && design ? (
+            {/* Unified view: mockup with design if available, otherwise standard product gallery */}
+            {design && selectedVariant ? (
               <MockupPreview
-                productVariantId={selectedVariant?.id || null}
+                productVariantId={selectedVariant.id}
                 printfulProductId={product.printfulId}
                 designUrl={design.imageUrl}
                 productImageUrl={product.imageUrl}

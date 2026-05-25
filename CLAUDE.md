@@ -1729,6 +1729,10 @@ GenAI-Merch uses Zustand for client-side cart state management with localStorage
 - Quantity controls with validation (1-99 items)
 - Duplicate detection (same variant + design)
 - Cart drawer state management
+- **Direct-to-Stripe checkout**: The "Proceed to Checkout" button on `/cart`
+  calls `createCheckoutSession()` and redirects to Stripe in a single step —
+  there is no intermediate `/checkout` review page. See
+  [Stripe Checkout Integration](#stripe-checkout-integration) for details.
 
 ### Cart Store Structure
 
@@ -2081,27 +2085,33 @@ GenAI-Merch uses Stripe Checkout for secure payment processing. The checkout flo
 
 ### Checkout Flow Overview
 
-**Complete User Journey**:
+**Streamlined Direct-to-Stripe Journey** (no intermediate review page):
 1. User adds items to cart (with optional custom designs)
-2. User navigates to checkout step in wizard or `/cart` page
-3. User reviews order summary (items, estimated shipping, estimated tax)
-4. User clicks "Proceed to Payment"
+2. User navigates to `/cart` and reviews items + subtotal
+3. User clicks "Proceed to Checkout" on the cart page
+4. `CheckoutButton` calls `createCheckoutSession()` directly — no intermediate `/checkout` page
 5. System creates Order in database with PENDING_PAYMENT status
 6. System creates Stripe Checkout Session with order metadata
-7. User redirects to Stripe Checkout (hosted page)
-8. User enters shipping address and selects shipping method
-9. User enters payment information
-10. Stripe processes payment and calculates final shipping + tax
-11. User redirects to success page with order confirmation
-12. Cart is automatically cleared
-13. Order status updates via Stripe webhooks (future)
+7. Browser redirects to Stripe Checkout (hosted page) via `window.location.href`
+8. User enters shipping address, selects shipping method, enters payment
+9. Stripe processes payment and calculates final shipping + tax
+10. User redirects to `/checkout/success?session_id=…` with order confirmation
+11. Cart is automatically cleared on success page mount
+12. Order status updates via Stripe webhooks (future)
+
+**Why no `/checkout` review page?** The previous flow had a redundant review page that
+showed *estimated* shipping/tax which mismatched Stripe's final calculations and
+created confusion. The cart page now sets expectations via a small Lock-icon
+transition line ("You're one screen away. Stripe handles shipping, tax, and payment
+securely."), and we redirect straight to Stripe — one less page, one less click,
+no estimate/actual mismatch.
 
 **Key Architecture Components**:
 - `POST /api/stripe/create-checkout` - Creates checkout session and order
 - `GET /api/stripe/session/[sessionId]` - Retrieves session details for success page
-- `src/lib/stripe/client.ts` - Client-side Stripe helpers
-- `src/components/design/steps/checkout-step.tsx` - Checkout review page
-- `src/app/checkout/success/page.tsx` - Order confirmation page
+- `src/lib/stripe/client.ts` - Client-side Stripe helpers (`createCheckoutSession`, `redirectToCheckout`)
+- `src/components/cart/checkout-button.tsx` - Direct-to-Stripe button on `/cart`
+- `src/app/checkout/success/page.tsx` - Order confirmation page (only `/checkout/*` route that exists)
 
 ### Order Lifecycle
 
@@ -2321,31 +2331,31 @@ GET /api/stripe/session/cs_test_abc123
 
 **Purpose**: Used by success page to display order confirmation with accurate shipping and tax amounts calculated by Stripe.
 
-### Checkout Step Component
+### Cart-to-Stripe Transition (replaces former CheckoutStep)
 
-**Location**: `src/components/design/steps/checkout-step.tsx`
+The previous `checkout-step.tsx` component and its `/checkout` route have been
+removed. Their job — collecting cart items, building the Stripe session, and
+redirecting — now happens inline from the cart page via `CheckoutButton`.
 
-**Features**:
-- **Order Review**: Display all cart items with images, variants, quantities
-- **Mockup Preview**: Show generated mockups if available
-- **Price Breakdown**: Subtotal, estimated shipping, estimated tax, total
-- **Shipping Info**: Collected during Stripe Checkout (not on this page)
-- **Secure Badge**: "Secure payment processing powered by Stripe"
-- **What's Next Card**: Expected timeline for order fulfillment
+**Location**: `src/components/cart/checkout-button.tsx`
 
 **User Flow**:
-1. User clicks "Proceed to Payment" button
-2. Button shows "Processing..." loading state
-3. `createCheckoutSession()` called with cart items
-4. Toast notification: "Redirecting to checkout... Order {number} created"
-5. `redirectToCheckout(sessionUrl)` redirects to Stripe
+1. User clicks "Proceed to Checkout" on `/cart`
+2. Button shows "Preparing checkout…" with spinner
+3. `createCheckoutSession({ items })` runs (creates Order + Stripe session)
+4. Toast notification: "Order {number} created — Redirecting to secure checkout…"
+5. `redirectToCheckout(sessionUrl)` redirects to Stripe via `window.location.href`
 6. User completes payment on Stripe's hosted page
 7. Stripe redirects to `/checkout/success?session_id={id}`
 
+**Expectation-setting on the cart page**: `CartSummary` renders a small Lock-icon
+line above the checkout button ("You're one screen away. Stripe handles shipping,
+tax, and payment securely.") — this is the only messaging between cart and Stripe.
+
 **Error Handling**:
-- Empty cart: Show error toast, don't proceed
-- API errors: Show toast with error message, re-enable button
-- Network errors: Show generic "Please try again" message
+- Empty cart: Toast error, button disabled
+- API errors: Toast with server-provided error message, re-enable button
+- Network errors: Toast with "Please try again in a moment" fallback
 
 ### Success Page
 
@@ -6728,12 +6738,56 @@ The product detail page integrates real-time mockup generation to show customers
 ### Overview
 
 When a user selects or uploads a design on the product detail page, the system:
-1. Automatically generates a realistic product mockup via Printful API
-2. Shows loading state during generation (5-10 seconds)
+1. Lazily generates ONE primary placement mockup via Printful API (~8s)
+2. Shows loading state during generation
 3. Displays the mockup with the design overlaid on the product
-4. Caches the mockup for instant retrieval on subsequent views
-5. Allows toggling between product view and mockup preview
+4. Renders un-generated placements as clickable placeholder cards (on-demand gen)
+5. Caches every generated mockup for instant retrieval on subsequent views
 6. Supports placement selection (front/back) for applicable products
+
+**Product detail integration**: The page no longer toggles between "Product View"
+and "Mockup Preview" tabs. Once a variant + design exist, the mockup IS the
+primary product view. See `src/app/products/[productId]/page.tsx` for the unified
+conditional render.
+
+### Lazy Single-Placement Generation (Option A)
+
+**Problem**: Previously, mockup-preview.tsx loaded a product detail page and
+eagerly looped through ALL valid placements for the technique (e.g. 4 placements
+for an embroidered cap: back, front_large, left, right). Each placement spawned
+a separate Printful task. With a 300ms delay between, this blew past Printful's
+rate limit — wall-clock could reach ~140s per page load (multiple 51-56s 429
+retries).
+
+**Fix**: On page load, only the **primary** placement is generated. Other
+placements appear as dashed placeholder cards in the same grid; clicking one
+triggers `generateSingleMockup` for just that placement.
+
+**Primary placement priority** (see `pickPrimaryCombination` in
+`src/components/products/mockup-preview.tsx`):
+1. The `placement` prop (user's front/back tab selection on the product page)
+2. Convention order: `front` → `embroidery_front` → `embroidery_front_large` →
+   `front_dtf_hat` → `front_dtf` → `default` → `back`
+3. First combination in the list (safety net)
+
+**State shape** (lives in MockupPreview):
+- `generatedMockups`: array of resolved `{styleId, styleName, placement, mockupUrl}`
+- `pendingCombinations`: array of `{styleId, styleName, placement}` waiting for
+  on-demand generation (rendered as placeholder cards)
+- `loadingPlacements`: `Set<string>` of placement names currently generating —
+  drives per-card spinners
+
+**Invariants**: Regenerate, cache-load, and on-demand handlers all must keep
+these three pieces of state consistent. When you clear `generatedMockups`, also
+clear `pendingCombinations` and `loadingPlacements`. When cache-load hydrates
+mockups from sessionStorage, populate `pendingCombinations` with the
+*un-cached* placements so users can still generate them.
+
+**Future: Option B (batched multi-placement)**: Printful V2's `MockupRequest`
+allows multiple `products[]` entries per task, each with its own style + placement.
+If you ever need eager multi-placement generation (e.g. catalog thumbnail
+previews), one batched task → one rate-limit hit, ~10s total. See breadcrumb
+comment in `src/lib/printful/mockups.ts` near the request builder.
 
 ### MockupPreview Component
 
